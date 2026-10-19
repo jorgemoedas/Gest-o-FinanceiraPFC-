@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="GFT Inteligente">
+  <rect width="512" height="512" rx="112" fill="#163d2e"/>
+  <g fill="none" stroke="#a8d5b6" stroke-linecap="round" stroke-linejoin="round" stroke-width="27">
+    <path d="M360 160a154 154 0 1 0 43 112H270"/>
+    <path d="M301 322v-92h112"/>
+  </g>
+  <g fill="none" stroke="#f0c391" stroke-linecap="round" stroke-width="24">
+    <path d="M208 327v-70"/>
+    <path d="M256 327v-112"/>
+    <path d="M304 327v-149"/>
+  </g>
+</svg>
