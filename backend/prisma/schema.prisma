@@ -1,0 +1,146 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+  schemas  = ["gft_inteligente"]
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+
+  @@schema("gft_inteligente")
+}
+
+enum CompanyRole {
+  OWNER
+  ADMIN
+  MEMBER
+  READ_ONLY
+
+  @@schema("gft_inteligente")
+}
+
+enum FinanceEntryType {
+  INCOME
+  EXPENSE
+
+  @@schema("gft_inteligente")
+}
+
+enum FinanceCategory {
+  SALES
+  SERVICES
+  TAXES
+  RENT
+  PAYROLL
+  UTILITIES
+  MARKETING
+  TRANSPORT
+  SUPPLIERS
+  OTHER
+
+  @@schema("gft_inteligente")
+}
+
+model User {
+  id                   String              @id @default(uuid()) @db.Uuid
+  email                String              @unique @db.VarChar(320)
+  passwordHash         String              @db.VarChar(100)
+  status               UserStatus          @default(ACTIVE)
+  lastLoginAt          DateTime?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  memberships          CompanyMembership[]
+  termAcceptances      TermAcceptance[]
+  auditEvents          AuditLog[]
+  financeTransactions  FinanceTransaction[]
+
+  @@index([status, createdAt])
+  @@schema("gft_inteligente")
+}
+
+model Company {
+  id                   String              @id @default(uuid()) @db.Uuid
+  name                 String              @db.VarChar(160)
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  memberships          CompanyMembership[]
+  acceptances          TermAcceptance[]
+  auditEvents          AuditLog[]
+  financeTransactions  FinanceTransaction[]
+
+  @@schema("gft_inteligente")
+}
+
+model CompanyMembership {
+  userId    String      @db.Uuid
+  companyId String      @db.Uuid
+  role      CompanyRole @default(OWNER)
+  isActive  Boolean     @default(true)
+  createdAt DateTime    @default(now())
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company   Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@id([userId, companyId])
+  @@index([companyId, role, isActive])
+  @@schema("gft_inteligente")
+}
+
+model TermAcceptance {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @db.Uuid
+  companyId      String   @db.Uuid
+  termsVersion   String   @db.VarChar(40)
+  privacyVersion String   @db.VarChar(40)
+  acceptedAt     DateTime @default(now())
+  user           User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  company        Company  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, companyId, termsVersion, privacyVersion])
+  @@index([companyId, acceptedAt])
+  @@schema("gft_inteligente")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  actorUserId String?  @db.Uuid
+  companyId   String?  @db.Uuid
+  action      String   @db.VarChar(80)
+  entityType  String?  @db.VarChar(80)
+  entityId    String?  @db.VarChar(80)
+  requestId   String?  @db.VarChar(100)
+  metadata    Json?    @db.JsonB
+  createdAt   DateTime @default(now())
+  actor       User?    @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+  company     Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+
+  @@index([actorUserId, createdAt])
+  @@index([companyId, createdAt])
+  @@index([action, createdAt])
+  @@schema("gft_inteligente")
+}
+
+model FinanceTransaction {
+  id              String           @id @default(uuid()) @db.Uuid
+  companyId       String           @db.Uuid
+  createdByUserId String           @db.Uuid
+  type            FinanceEntryType
+  category        FinanceCategory
+  description     String           @db.VarChar(160)
+  amount          Decimal          @db.Decimal(14, 2)
+  occurredAt      DateTime         @db.Timestamptz(3)
+  createdAt       DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime         @updatedAt @db.Timestamptz(3)
+  company         Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy       User             @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  @@index([companyId, occurredAt])
+  @@index([companyId, type, occurredAt])
+  @@index([companyId, category, occurredAt])
+  @@schema("gft_inteligente")
+}
