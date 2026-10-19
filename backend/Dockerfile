@@ -7,7 +7,9 @@ FROM node:22-bookworm-slim AS builder
 WORKDIR /app
 COPY --from=dependencies /app/node_modules ./node_modules
 COPY . .
-RUN npm run prisma:generate
+# Prisma 7 validates DATABASE_URL while loading prisma.config.ts. A placeholder
+# is sufficient for client generation; the real URL is supplied at runtime.
+RUN DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postgres?schema=gft_inteligente npm run prisma:generate
 RUN npm run build
 
 FROM node:22-bookworm-slim AS production-dependencies
