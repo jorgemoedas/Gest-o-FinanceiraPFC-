@@ -4,7 +4,7 @@ Sistema web de gestão financeira e apoio à organização tributária para micr
 
 ## Estado desta versão
 
-Esta branch registra o estado do sistema até a **Entrega 3 (19/10/2026)** do PFC. A monografia atualizada é mantida separadamente no chat do projeto, conforme o cronograma institucional.
+Esta branch registra o estado do sistema até a **Entrega 3 (19/10/2026)** do PFC.
 
 ## Estrutura
 
