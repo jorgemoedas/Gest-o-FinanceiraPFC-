@@ -2,11 +2,13 @@ generator client {
   provider     = "prisma-client"
   output       = "../src/generated/prisma"
   moduleFormat = "cjs"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
   provider = "postgresql"
   schemas  = ["gft_inteligente"]
+  extensions = [pg_trgm(schema: "extensions")]
 }
 
 enum UserStatus {
@@ -47,32 +49,142 @@ enum FinanceCategory {
   @@schema("gft_inteligente")
 }
 
+enum FinanceTransactionStatus {
+  PAID
+  PENDING
+  CANCELLED
+  REVERSED
+
+  @@schema("gft_inteligente")
+}
+
+enum FinanceAdjustmentKind {
+  VOID
+  REFUND
+
+  @@schema("gft_inteligente")
+}
+
+enum CounterpartyRole {
+  CUSTOMER
+  SUPPLIER
+  BOTH
+
+  @@schema("gft_inteligente")
+}
+
+enum RecurrenceFrequency {
+  WEEKLY
+  MONTHLY
+  YEARLY
+
+  @@schema("gft_inteligente")
+}
+
+enum FiscalObligationStatus {
+  PENDING
+  DONE
+  DISMISSED
+
+  @@schema("gft_inteligente")
+}
+
 model User {
-  id                   String              @id @default(uuid()) @db.Uuid
-  email                String              @unique @db.VarChar(320)
-  passwordHash         String              @db.VarChar(100)
-  status               UserStatus          @default(ACTIVE)
-  lastLoginAt          DateTime?
-  createdAt            DateTime            @default(now())
-  updatedAt            DateTime            @updatedAt
-  memberships          CompanyMembership[]
-  termAcceptances      TermAcceptance[]
-  auditEvents          AuditLog[]
-  financeTransactions  FinanceTransaction[]
+  id                  String               @id @default(uuid()) @db.Uuid
+  email               String               @unique @db.VarChar(320)
+  passwordHash        String               @db.VarChar(100)
+  status              UserStatus           @default(ACTIVE)
+  lastLoginAt         DateTime?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  memberships         CompanyMembership[]
+  termAcceptances     TermAcceptance[]
+  auditEvents         AuditLog[]
+  financeTransactions FinanceTransaction[]
+  recurrences         FinanceRecurrence[]
+  attachments         FinanceAttachment[]
+  passwordResets      PasswordResetToken[]
 
   @@index([status, createdAt])
   @@schema("gft_inteligente")
 }
 
 model Company {
-  id                   String              @id @default(uuid()) @db.Uuid
-  name                 String              @db.VarChar(160)
-  createdAt            DateTime            @default(now())
-  updatedAt            DateTime            @updatedAt
-  memberships          CompanyMembership[]
-  acceptances          TermAcceptance[]
-  auditEvents          AuditLog[]
-  financeTransactions  FinanceTransaction[]
+  id                  String                @id @default(uuid()) @db.Uuid
+  name                String                @db.VarChar(160)
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  memberships         CompanyMembership[]
+  acceptances         TermAcceptance[]
+  auditEvents         AuditLog[]
+  financeTransactions FinanceTransaction[]
+  businessProfile     CompanyProfile?
+  counterparties      FinanceCounterparty[]
+  recurrences         FinanceRecurrence[]
+  attachments         FinanceAttachment[]
+  fiscalObligations   FiscalObligation[]
+
+  @@schema("gft_inteligente")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  tokenHash String    @unique @db.VarChar(100)
+  expiresAt DateTime  @db.Timestamptz(3)
+  usedAt    DateTime? @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@schema("gft_inteligente")
+}
+
+model FiscalObligation {
+  id          String                 @id @default(uuid()) @db.Uuid
+  companyId   String                 @db.Uuid
+  kind        String                 @db.VarChar(40)
+  title       String                 @db.VarChar(160)
+  description String?                @db.VarChar(400)
+  dueAt       DateTime               @db.Timestamptz(3)
+  status      FiscalObligationStatus @default(PENDING)
+  source      String                 @db.VarChar(40)
+  periodKey   String?                @db.VarChar(20)
+  completedAt DateTime?              @db.Timestamptz(3)
+  version     Int                    @default(1)
+  createdAt   DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime               @updatedAt @db.Timestamptz(3)
+  company     Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, kind, periodKey])
+  @@index([companyId, dueAt])
+  @@schema("gft_inteligente")
+}
+
+model CompanyProfile {
+  companyId               String   @id @db.Uuid
+  cnpj                    String   @unique @db.VarChar(14)
+  legalName               String   @db.VarChar(200)
+  tradeName               String?  @db.VarChar(200)
+  registrationStatus      String?  @db.VarChar(40)
+  companyType             String?  @db.VarChar(40)
+  size                    String?  @db.VarChar(40)
+  openingDate             String?  @db.VarChar(10)
+  mainActivityCode        String?  @db.VarChar(32)
+  mainActivityDescription String?  @db.VarChar(200)
+  street                  String?  @db.VarChar(160)
+  number                  String?  @db.VarChar(40)
+  complement              String?  @db.VarChar(80)
+  district                String?  @db.VarChar(100)
+  city                    String?  @db.VarChar(100)
+  state                   String?  @db.VarChar(2)
+  postalCode              String?  @db.VarChar(8)
+  source                  String   @default("ReceitaWS") @db.VarChar(32)
+  version                 Int      @default(1)
+  consultedAt             DateTime @db.Timestamptz(3)
+  createdAt               DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt               DateTime @updatedAt @db.Timestamptz(3)
+  company                 Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@schema("gft_inteligente")
 }
@@ -126,21 +238,115 @@ model AuditLog {
 }
 
 model FinanceTransaction {
-  id              String           @id @default(uuid()) @db.Uuid
-  companyId       String           @db.Uuid
-  createdByUserId String           @db.Uuid
+  id              String                   @id @default(uuid()) @db.Uuid
+  companyId       String                   @db.Uuid
+  createdByUserId String                   @db.Uuid
   type            FinanceEntryType
   category        FinanceCategory
-  description     String           @db.VarChar(160)
-  amount          Decimal          @db.Decimal(14, 2)
-  occurredAt      DateTime         @db.Timestamptz(3)
-  createdAt       DateTime         @default(now()) @db.Timestamptz(3)
-  updatedAt       DateTime         @updatedAt @db.Timestamptz(3)
-  company         Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  createdBy       User             @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
+  subcategory     String?                  @db.VarChar(80)
+  description     String                   @db.VarChar(160)
+  amount          Decimal                  @db.Decimal(14, 2)
+  occurredAt      DateTime                 @db.Timestamptz(3)
+  dueAt           DateTime?                @db.Timestamptz(3)
+  status          FinanceTransactionStatus @default(PAID)
+  counterpartyId  String?                  @db.Uuid
+  recurrenceId    String?                  @db.Uuid
+  reversalOfId    String?                  @unique @db.Uuid
+  adjustmentKind  FinanceAdjustmentKind?
+  reversedAt      DateTime?                @db.Timestamptz(3)
+  version         Int                      @default(1)
+  createdAt       DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime                 @updatedAt @db.Timestamptz(3)
+  company         Company                  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy       User                     @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
+  counterparty    FinanceCounterparty?     @relation(fields: [counterpartyId, companyId], references: [id, companyId], onDelete: Restrict)
+  recurrence      FinanceRecurrence?       @relation(fields: [recurrenceId, companyId], references: [id, companyId], onDelete: Restrict)
+  attachments     FinanceAttachment[]
+  reversalOf      FinanceTransaction?      @relation("FinanceTransactionReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
+  reversal        FinanceTransaction?      @relation("FinanceTransactionReversal")
 
+  @@unique([id, companyId])
+  @@index([companyId, counterpartyId])
+  @@index([companyId, recurrenceId])
   @@index([companyId, occurredAt])
+  @@index([companyId, occurredAt(sort: Desc), createdAt(sort: Desc)])
   @@index([companyId, type, occurredAt])
   @@index([companyId, category, occurredAt])
+  @@index([companyId, status, dueAt])
+  @@index([companyId, status, occurredAt])
+  @@index([companyId, adjustmentKind, occurredAt])
+  @@schema("gft_inteligente")
+}
+
+model FinanceRecurrence {
+  id              String              @id @default(uuid()) @db.Uuid
+  companyId       String              @db.Uuid
+  createdByUserId String              @db.Uuid
+  type            FinanceEntryType
+  category        FinanceCategory
+  subcategory     String?             @db.VarChar(80)
+  description     String              @db.VarChar(160)
+  amount          Decimal             @db.Decimal(14, 2)
+  counterpartyId  String?             @db.Uuid
+  frequency       RecurrenceFrequency
+  intervalCount   Int                 @default(1)
+  startDate       DateTime            @db.Timestamptz(3)
+  endDate         DateTime?           @db.Timestamptz(3)
+  nextRunAt       DateTime            @db.Timestamptz(3)
+  lastRunAt       DateTime?           @db.Timestamptz(3)
+  isActive        Boolean             @default(true)
+  version         Int                 @default(1)
+  createdAt       DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime            @updatedAt @db.Timestamptz(3)
+  company         Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy       User                @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
+  counterparty    FinanceCounterparty? @relation(fields: [counterpartyId, companyId], references: [id, companyId], onDelete: Restrict)
+  transactions    FinanceTransaction[]
+
+  @@unique([id, companyId])
+  @@index([companyId, isActive, nextRunAt])
+  @@schema("gft_inteligente")
+}
+
+model FinanceAttachment {
+  id               String             @id @default(uuid()) @db.Uuid
+  companyId        String             @db.Uuid
+  transactionId    String             @db.Uuid
+  uploadedByUserId String             @db.Uuid
+  fileName         String             @db.VarChar(200)
+  contentType      String             @db.VarChar(120)
+  byteSize         Int
+  storageKey       String             @db.VarChar(300)
+  checksum         String             @db.VarChar(64)
+  createdAt        DateTime           @default(now()) @db.Timestamptz(3)
+  company          Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  transaction      FinanceTransaction @relation(fields: [transactionId, companyId], references: [id, companyId], onDelete: Cascade)
+  uploadedBy       User               @relation(fields: [uploadedByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([id, companyId])
+  @@index([companyId, transactionId])
+  @@schema("gft_inteligente")
+}
+
+model FinanceCounterparty {
+  id                  String               @id @default(uuid()) @db.Uuid
+  companyId           String               @db.Uuid
+  name                String               @db.VarChar(160)
+  role                CounterpartyRole
+  cnpj                String?              @db.VarChar(14)
+  legalName           String?              @db.VarChar(200)
+  tradeName           String?              @db.VarChar(200)
+  source              String?              @db.VarChar(32)
+  consultedAt         DateTime?            @db.Timestamptz(3)
+  createdAt           DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime             @updatedAt @db.Timestamptz(3)
+  company             Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  financeTransactions FinanceTransaction[]
+  recurrences         FinanceRecurrence[]
+
+  @@unique([id, companyId])
+  @@unique([companyId, cnpj])
+  @@index([companyId, role, name])
+  @@index([name(ops: raw("extensions.gin_trgm_ops"))], type: Gin, map: "FinanceCounterparty_name_trgm_idx")
   @@schema("gft_inteligente")
 }

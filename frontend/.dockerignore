@@ -1,8 +1,0 @@
-node_modules
-.next
-.git
-coverage
-.env*
-!.env.example
-*.log
-.DS_Store

@@ -1,6 +1,8 @@
 import { Transform, Type } from 'class-transformer';
-import { IsDateString, IsEnum, IsInt, IsOptional, IsString, Length, Matches, Max, Min } from 'class-validator';
-import { FinanceCategory, FinanceEntryType } from '../../../generated/prisma/client';
+import { IsDateString, IsEnum, IsIn, IsInt, IsOptional, IsString, Length, Matches, Max, Min } from 'class-validator';
+import { FinanceCategory, FinanceEntryType, FinanceTransactionStatus } from '../../../generated/prisma/client';
+
+const transactionStatusFilters = [...Object.values(FinanceTransactionStatus), 'OVERDUE', 'REFUNDED'];
 
 export class TransactionListQueryDto {
   @Type(() => Number)
@@ -22,6 +24,10 @@ export class TransactionListQueryDto {
   @IsOptional()
   @IsEnum(FinanceCategory)
   category?: FinanceCategory;
+
+  @IsOptional()
+  @IsIn(transactionStatusFilters)
+  status?: FinanceTransactionStatus | 'OVERDUE' | 'REFUNDED';
 
   @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
   @IsOptional()

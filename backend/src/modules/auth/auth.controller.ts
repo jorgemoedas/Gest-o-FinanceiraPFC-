@@ -10,11 +10,16 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { PasswordResetConfirmDto, PasswordResetRequestDto } from './dto/password-reset.dto';
+import { PasswordResetService } from './password-reset.service';
 
 @Controller('auth')
 @UseGuards(JwtAuthGuard)
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly passwordReset: PasswordResetService
+  ) {}
 
   @Public()
   @Post('register')
@@ -30,6 +35,33 @@ export class AuthController {
     return this.authService.login(input);
   }
 
+  @Public()
+  @Post('password-reset')
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  requestPasswordReset(@Body() input: PasswordResetRequestDto) {
+    return this.passwordReset.request(input);
+  }
+
+  @Public()
+  @Post('password-reset/confirm')
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  confirmPasswordReset(@Body() input: PasswordResetConfirmDto) {
+    return this.passwordReset.confirm(input);
+  }
+
+  @Public()
+  @Post('refresh')
+  // Uma sessão normal renova só após expirar; dez/minuto tolera repetição de rede sem igualar o limite de credenciais.
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  refresh(@Body() input: { refreshToken: string }) {
+    return this.authService.refresh(input.refreshToken);
+  }
+  @Public()
+  @Post('logout')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  logout(@Body() input: { refreshToken?: string }) {
+    return this.authService.logout(input.refreshToken);
+  }
   @Get('me')
   me(@CurrentUser() user: AuthPrincipal) {
     return user;

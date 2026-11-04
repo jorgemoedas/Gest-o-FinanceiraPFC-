@@ -1,5 +1,8 @@
 export interface PostgresAdapterOptions {
   connectionString: string;
+  max?: number;
+  connectionTimeoutMillis?: number;
+  idleTimeoutMillis?: number;
   ssl?: {
     ca: string;
     rejectUnauthorized: true;
