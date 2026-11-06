@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PrismaService } from '../../../database/prisma.service';
+import { setTenantContext } from '../../../database/tenant-context';
 import { AuthPrincipal } from '../../../common/auth-principal';
 
 interface JwtAccessPayload {
@@ -34,14 +35,17 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       throw new UnauthorizedException('Token inválido.');
     }
 
-    const membership = await this.prisma.companyMembership.findUnique({
-      where: {
-        userId_companyId: {
-          userId: payload.sub,
-          companyId: payload.companyId
-        }
-      },
-      include: { user: true }
+    const membership = await this.prisma.$transaction(async (tx) => {
+      await setTenantContext(tx, { userId: payload.sub, companyId: payload.companyId });
+      return tx.companyMembership.findUnique({
+        where: {
+          userId_companyId: {
+            userId: payload.sub,
+            companyId: payload.companyId
+          }
+        },
+        include: { user: true }
+      });
     });
 
     if (!membership || !membership.isActive || membership.user.status !== 'ACTIVE') {
