@@ -1,0 +1,120 @@
+services:
+  backend:
+    image: ${BACKEND_IMAGE:-gftauth-backend:local}
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?Defina DATABASE_URL no ambiente do host}
+      DATABASE_CA_CERT: ${DATABASE_CA_CERT-}
+      DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-10}
+      DATABASE_POOL_TIMEOUT_MS: ${DATABASE_POOL_TIMEOUT_MS:-5000}
+      DATABASE_TRANSACTION_TIMEOUT_MS: ${DATABASE_TRANSACTION_TIMEOUT_MS:-15000}
+      DATABASE_CONNECTION_TIMEOUT_MS: ${DATABASE_CONNECTION_TIMEOUT_MS:-10000}
+      DATABASE_IDLE_TIMEOUT_MS: ${DATABASE_IDLE_TIMEOUT_MS:-30000}
+      DATABASE_RETRY_MAX_ATTEMPTS: ${DATABASE_RETRY_MAX_ATTEMPTS:-3}
+      DATABASE_RETRY_BASE_DELAY_MS: ${DATABASE_RETRY_BASE_DELAY_MS:-100}
+      DATABASE_RETRY_MAX_DELAY_MS: ${DATABASE_RETRY_MAX_DELAY_MS:-1000}
+      PORT: ${BACKEND_PORT:-3001}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:?Defina FRONTEND_ORIGIN no ambiente do host}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?Defina JWT_ACCESS_SECRET no ambiente do host}
+      JWT_ACCESS_TTL_SECONDS: ${JWT_ACCESS_TTL_SECONDS:-900}
+      REFRESH_TOKEN_TTL_SECONDS: ${REFRESH_TOKEN_TTL_SECONDS:-2592000}
+      JWT_ISSUER: ${JWT_ISSUER:-gft-inteligente-api}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-gft-inteligente-client}
+      BCRYPT_COST: ${BCRYPT_COST:-12}
+      TERMS_VERSION: ${TERMS_VERSION:-2026-10-01}
+      PRIVACY_POLICY_VERSION: ${PRIVACY_POLICY_VERSION:-2026-10-01}
+      GEMINI_API_KEY: ${GEMINI_API_KEY-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.8-flash}
+      ALERT_ERROR_RATE_PERCENT: ${ALERT_ERROR_RATE_PERCENT:-20}
+      ALERT_MIN_ROUTE_REQUESTS: ${ALERT_MIN_ROUTE_REQUESTS:-5}
+      ALERT_LATENCY_P95_MS: ${ALERT_LATENCY_P95_MS:-1000}
+      ALERT_AUTH_FAILURES_THRESHOLD: ${ALERT_AUTH_FAILURES_THRESHOLD:-10}
+      ALERT_RATE_LIMIT_THRESHOLD: ${ALERT_RATE_LIMIT_THRESHOLD:-5}
+      ALERT_INTEGRATION_FAILURES_THRESHOLD: ${ALERT_INTEGRATION_FAILURES_THRESHOLD:-3}
+      ALERT_WINDOW_SECONDS: ${ALERT_WINDOW_SECONDS:-300}
+      ALERT_SILENCE_SECONDS: ${ALERT_SILENCE_SECONDS:-300}
+      ALERT_WEBHOOK_ENABLED: ${ALERT_WEBHOOK_ENABLED:-false}
+      ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL-}
+      ATTACHMENT_STORAGE_DIR: ${ATTACHMENT_STORAGE_DIR:-/app/var/attachments}
+      GEMINI_INTERACTIONS_URL: ${GEMINI_INTERACTIONS_URL-}
+      RECEITAWS_TIMEOUT_MS: ${RECEITAWS_TIMEOUT_MS:-4500}
+      GEMINI_TIMEOUT_MS: ${GEMINI_TIMEOUT_MS:-7000}
+      UPSTREAM_MAX_ATTEMPTS: ${UPSTREAM_MAX_ATTEMPTS:-2}
+      UPSTREAM_RETRY_BASE_DELAY_MS: ${UPSTREAM_RETRY_BASE_DELAY_MS:-200}
+      UPSTREAM_CIRCUIT_FAILURES: ${UPSTREAM_CIRCUIT_FAILURES:-3}
+      UPSTREAM_CIRCUIT_RECOVERY_MS: ${UPSTREAM_CIRCUIT_RECOVERY_MS:-30000}
+    ports:
+      - "${BACKEND_PORT:-3001}:${BACKEND_PORT:-3001}"
+    volumes:
+      - backend_attachments:/app/var/attachments
+    deploy:
+      resources:
+        limits:
+          cpus: '1.00'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    healthcheck:
+      # /health é público, não exige autenticação e retorna 2xx sem consultar o banco.
+      test:
+        - CMD
+        - node
+        - -e
+        - >-
+          fetch('http://127.0.0.1:${BACKEND_PORT:-3001}/health')
+          .then((response) => process.exit(response.ok ? 0 : 1))
+          .catch(() => process.exit(1));
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  frontend:
+    image: ${FRONTEND_IMAGE:-gftauth-frontend:local}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      PORT: ${FRONTEND_PORT:-3000}
+      AUTH_API_BASE_URL: ${AUTH_API_BASE_URL:?Defina AUTH_API_BASE_URL no ambiente do host}
+      TERMS_VERSION: ${TERMS_VERSION:-2026-10-01}
+      PRIVACY_POLICY_VERSION: ${PRIVACY_POLICY_VERSION:-2026-10-01}
+      APP_ORIGIN: ${APP_ORIGIN:?Defina APP_ORIGIN no ambiente do host}
+      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-true}
+    ports:
+      - "${FRONTEND_PORT:-3000}:${FRONTEND_PORT:-3000}"
+    deploy:
+      resources:
+        limits:
+          cpus: '1.00'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    healthcheck:
+      # O frontend não possui rota /health própria; / e /login são rotas reais
+      # e confirmam liveness e renderização pronta da aplicação Next.
+      test:
+        - CMD
+        - node
+        - -e
+        - >-
+          const base = 'http://127.0.0.1:${FRONTEND_PORT:-3000}';
+          Promise.all(['/', '/login'].map(async (path) => {
+          const response = await fetch(base + path); if (!response.ok) throw new Error(path);
+          })).then(() => process.exit(0)).catch(() => process.exit(1));
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  backend_attachments:

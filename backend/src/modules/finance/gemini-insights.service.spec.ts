@@ -1,4 +1,4 @@
-import { ServiceUnavailableException } from '@nestjs/common';
+import { BadGatewayException, GatewayTimeoutException, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AuthPrincipal } from '../../common/auth-principal';
 import { RateLimitException } from '../../common/exceptions/rate-limit.exception';
@@ -118,5 +118,61 @@ describe('GeminiInsightsService', () => {
       metadata: expect.objectContaining({ result: 'success_fallback', model: 'gemini-3.5-flash-lite' })
     }));
     fetch.mockRestore();
+  });
+
+  it('retries a transient network failure and succeeds using mocked responses', async () => {
+    jest.mocked(finance.getDashboard).mockResolvedValue(dashboard as never);
+    jest.mocked(config.get).mockImplementation(((key: string, fallback?: string) => key === 'GEMINI_API_KEY' ? 'unit-test-key' : fallback) as never);
+    const fetch = jest.spyOn(global, 'fetch')
+      .mockRejectedValueOnce(new TypeError('temporary network failure'))
+      .mockResolvedValueOnce(jsonResponse({ output_text: 'Análise de teste.' }));
+    await expect(service.create(principal, 6)).resolves.toMatchObject({ generated: true, insights: 'Análise de teste.' });
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect((fetch.mock.calls[0][1]?.signal as AbortSignal)).toBeDefined();
+    fetch.mockRestore();
+  });
+
+  it('does not retry an invalid client response', async () => {
+    jest.mocked(finance.getDashboard).mockResolvedValue(dashboard as never);
+    jest.mocked(config.get).mockImplementation(((key: string, fallback?: string) => key === 'GEMINI_API_KEY' ? 'unit-test-key' : fallback) as never);
+    const fetch = jest.spyOn(global, 'fetch').mockResolvedValue(new Response(null, { status: 400 }));
+    await expect(service.create(principal, 6)).rejects.toBeInstanceOf(BadGatewayException);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    fetch.mockRestore();
+  });
+
+  it('retries timeouts within the configured attempt bound and reports a gateway timeout', async () => {
+    jest.mocked(finance.getDashboard).mockResolvedValue(dashboard as never);
+    jest.mocked(config.get).mockImplementation(((key: string, fallback?: string) => key === 'GEMINI_API_KEY' ? 'unit-test-key' : fallback) as never);
+    const timeout = new Error('synthetic timeout');
+    timeout.name = 'TimeoutError';
+    const fetch = jest.spyOn(global, 'fetch').mockRejectedValue(timeout);
+    await expect(service.create(principal, 6)).rejects.toBeInstanceOf(GatewayTimeoutException);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    fetch.mockRestore();
+  });
+
+  it('opens the circuit after a transient 503 and recovers after its configured window', async () => {
+    jest.useFakeTimers();
+    jest.mocked(finance.getDashboard).mockResolvedValue(dashboard as never);
+    jest.mocked(config.get).mockImplementation(((key: string, fallback?: string) => {
+      if (key === 'GEMINI_API_KEY') return 'unit-test-key';
+      if (key === 'UPSTREAM_MAX_ATTEMPTS') return '1';
+      if (key === 'UPSTREAM_CIRCUIT_FAILURES') return '1';
+      if (key === 'UPSTREAM_CIRCUIT_RECOVERY_MS') return '100';
+      return fallback;
+    }) as never);
+    service = new GeminiInsightsService(config, finance, audit);
+    const fetch = jest.spyOn(global, 'fetch')
+      .mockResolvedValueOnce(new Response(null, { status: 503 }))
+      .mockResolvedValueOnce(jsonResponse({ output_text: 'Recuperado.' }));
+    await expect(service.create(principal, 6)).rejects.toBeInstanceOf(ServiceUnavailableException);
+    await expect(service.create(principal, 6)).rejects.toThrow('temporariamente indisponível após falhas repetidas');
+    expect(fetch).toHaveBeenCalledTimes(1);
+    jest.advanceTimersByTime(101);
+    await expect(service.create(principal, 6)).resolves.toMatchObject({ generated: true, insights: 'Recuperado.' });
+    expect(fetch).toHaveBeenCalledTimes(2);
+    fetch.mockRestore();
+    jest.useRealTimers();
   });
 });

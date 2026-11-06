@@ -5,10 +5,15 @@ import {
   HttpException,
   Injectable,
   NotFoundException,
+  Optional,
   ServiceUnavailableException
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { AuthPrincipal } from '../../common/auth-principal';
 import { RateLimitException } from '../../common/exceptions/rate-limit.exception';
+import { AlertsService } from '../../common/observability/alerts.service';
+import { MetricsService } from '../../common/observability/metrics.service';
+import { CircuitOpenError, transientNetworkFailure, UpstreamResilience } from '../../common/resilience/upstream-resilience';
 import { AuditLogWriter } from '../audit/audit-log-writer.service';
 import { isValidCnpj, maskCnpj, normalizeCnpj } from './cnpj';
 
@@ -57,27 +62,8 @@ export interface BusinessRegistryRecord {
   };
   source: 'ReceitaWS';
   sourceUpdatedAt: string;
-}
-
-const cache = new Map<string, { expiresAt: number; value: BusinessRegistryRecord }>();
-let quotaWindowStartedAt = 0;
-let quotaRequests = 0;
-
-function pruneExpiredCache(now: number): void {
-  for (const [cnpj, entry] of cache) {
-    if (entry.expiresAt <= now) cache.delete(cnpj);
-  }
-}
-
-function reserveUpstreamCall(now: number): void {
-  if (now - quotaWindowStartedAt >= UPSTREAM_WINDOW_MS) {
-    quotaWindowStartedAt = now;
-    quotaRequests = 0;
-  }
-  if (quotaRequests >= UPSTREAM_MAX_REQUESTS) {
-    throw new RateLimitException('O limite compartilhado da consulta pública foi atingido. Tente novamente em até um minuto.');
-  }
-  quotaRequests += 1;
+  stale?: true;
+  availabilityNotice?: string;
 }
 
 function text(value: unknown): string | null {
@@ -91,10 +77,14 @@ function activity(value: unknown): { code: string | null; description: string | 
 }
 
 function normalizeProviderPayload(payload: ProviderPayload, requestedCnpj: string): BusinessRegistryRecord {
+  const cnpj = normalizeCnpj(text(payload.cnpj) ?? requestedCnpj);
+  if (!isValidCnpj(cnpj) || cnpj !== requestedCnpj) {
+    throw new BadGatewayException('A ReceitaWS devolveu um CNPJ inválido ou diferente do solicitado.');
+  }
   const legalName = text(payload.nome);
   if (!legalName) throw new BadGatewayException('A ReceitaWS devolveu um cadastro sem razão social.');
   return {
-    cnpj: normalizeCnpj(text(payload.cnpj) ?? requestedCnpj),
+    cnpj,
     legalName,
     tradeName: text(payload.fantasia),
     registrationStatus: text(payload.situacao),
@@ -109,7 +99,7 @@ function normalizeProviderPayload(payload: ProviderPayload, requestedCnpj: strin
       district: text(payload.bairro),
       city: text(payload.municipio),
       state: text(payload.uf),
-      postalCode: text(payload.cep)
+      postalCode: text(payload.cep)?.replace(/\D/g, '') ?? null
     },
     source: 'ReceitaWS',
     sourceUpdatedAt: new Date().toISOString()
@@ -129,52 +119,112 @@ function providerError(payload: ProviderPayload): Error {
 
 @Injectable()
 export class BusinessRegistryService {
-  constructor(private readonly auditWriter: AuditLogWriter) {}
+  private readonly cache = new Map<string, { expiresAt: number; value: BusinessRegistryRecord }>();
+  private readonly apiBase: string;
+  private readonly timeoutMs: number;
+  private readonly resilience: UpstreamResilience;
+  private quotaWindowStartedAt = 0;
+  private quotaRequests = 0;
+
+  constructor(
+    private readonly auditWriter: AuditLogWriter,
+    @Optional() config?: ConfigService,
+    @Optional() private readonly metrics?: MetricsService,
+    @Optional() private readonly alerts?: AlertsService
+  ) {
+    this.apiBase = (config?.get<string>('RECEITAWS_API_BASE_URL')?.trim() || API_BASE).replace(/\/+$/, '') + '/';
+    this.timeoutMs = this.positiveConfig(config, 'RECEITAWS_TIMEOUT_MS', 4500);
+    this.resilience = new UpstreamResilience({
+      attempts: this.positiveConfig(config, 'UPSTREAM_MAX_ATTEMPTS', 2),
+      baseDelayMs: this.positiveConfig(config, 'UPSTREAM_RETRY_BASE_DELAY_MS', 200),
+      failureThreshold: this.positiveConfig(config, 'UPSTREAM_CIRCUIT_FAILURES', 3),
+      recoveryMs: this.positiveConfig(config, 'UPSTREAM_CIRCUIT_RECOVERY_MS', 30000)
+    });
+  }
+
+  private positiveConfig(config: ConfigService | undefined, key: string, fallback: number): number {
+    const value = Number(config?.get<string>(key, String(fallback)) ?? fallback);
+    return Number.isFinite(value) && value > 0 ? value : fallback;
+  }
+
+  private pruneExpiredCache(now: number): void {
+    for (const [cnpj, entry] of this.cache) {
+      if (entry.expiresAt <= now) this.cache.delete(cnpj);
+    }
+  }
+
+  private reserveUpstreamCall(now: number): void {
+    if (now - this.quotaWindowStartedAt >= UPSTREAM_WINDOW_MS) {
+      this.quotaWindowStartedAt = now;
+      this.quotaRequests = 0;
+    }
+    if (this.quotaRequests >= UPSTREAM_MAX_REQUESTS) {
+      throw new RateLimitException('O limite compartilhado da consulta pública foi atingido. Tente novamente em até um minuto.');
+    }
+    this.quotaRequests += 1;
+  }
 
   async lookup(input: string, principal: AuthPrincipal): Promise<BusinessRegistryRecord> {
     const cnpj = normalizeCnpj(input);
     if (!isValidCnpj(cnpj)) throw new BadRequestException('Informe um CNPJ válido de 14 caracteres.');
 
     const now = Date.now();
-    pruneExpiredCache(now);
-    const cached = cache.get(cnpj);
+    this.pruneExpiredCache(now);
+    const cached = this.cache.get(cnpj);
     if (cached && cached.expiresAt > now) {
       await this.auditLookup(principal, cnpj, 'local_cache_hit');
       return cached.value;
     }
-    cache.delete(cnpj);
-    reserveUpstreamCall(now);
+    this.cache.delete(cnpj);
+    if (this.resilience.isOpen()) {
+      const mapped = this.mapNetworkError(new CircuitOpenError());
+      this.metrics?.recordOperationalEvent('integration_failure', 'receitaws');
+      this.alerts?.evaluate();
+      await this.auditLookup(principal, cnpj, `failed_${mapped.getStatus()}`);
+      throw mapped;
+    }
+    this.reserveUpstreamCall(now);
 
     let record: BusinessRegistryRecord;
     try {
-      const response = await fetch(`${API_BASE}${encodeURIComponent(cnpj)}`, {
-        method: 'GET',
-        headers: { Accept: 'application/json' },
-        signal: AbortSignal.timeout(8_000)
-      });
-
-      if (response.status === 429) throw new RateLimitException('A ReceitaWS limitou as consultas. Aguarde antes de tentar novamente.');
-      if (response.status === 402) throw new ServiceUnavailableException('A consulta foi recusada pelo limite/plano atual da ReceitaWS.');
-      if (response.status === 504) throw new GatewayTimeoutException('A ReceitaWS excedeu o tempo de resposta. Tente novamente mais tarde.');
-      if (response.status === 404) throw new NotFoundException('A ReceitaWS não localizou este CNPJ.');
-      if (!response.ok) throw new BadGatewayException('A ReceitaWS está temporariamente indisponível.');
-
-      const payload = await response.json() as ProviderPayload;
-      if (payload.status !== 'OK') throw providerError(payload);
-      record = normalizeProviderPayload(payload, cnpj);
+      record = await this.resilience.execute(async () => {
+        const response = await fetch(`${this.apiBase}${encodeURIComponent(cnpj)}`, {
+          method: 'GET',
+          headers: { Accept: 'application/json' },
+          signal: AbortSignal.timeout(this.timeoutMs)
+        });
+        if (response.status === 429) throw new RateLimitException('A ReceitaWS limitou as consultas. Aguarde antes de tentar novamente.');
+        if (response.status === 402) throw new ServiceUnavailableException('A consulta foi recusada pelo limite/plano atual da ReceitaWS.');
+        if (response.status === 504) throw new GatewayTimeoutException('A ReceitaWS excedeu o tempo de resposta. Tente novamente mais tarde.');
+        if (response.status === 404) throw new NotFoundException('A ReceitaWS não localizou este CNPJ.');
+        if (response.status >= 500) throw new ServiceUnavailableException('A ReceitaWS está temporariamente indisponível. Tente novamente em instantes.');
+        if (!response.ok) throw new BadGatewayException('A ReceitaWS não conseguiu concluir a consulta.');
+        let payload: ProviderPayload;
+        try { payload = await response.json() as ProviderPayload; }
+        catch { throw new BadGatewayException('A ReceitaWS retornou uma resposta inválida.'); }
+        if (payload.status !== 'OK') throw providerError(payload);
+        return normalizeProviderPayload(payload, cnpj);
+      },
+      (error) => transientNetworkFailure(error) || (error instanceof HttpException && [503, 504].includes(error.getStatus())),
+      (error) => transientNetworkFailure(error) || (error instanceof HttpException && [503, 504].includes(error.getStatus())));
     } catch (error: unknown) {
       const mapped = this.mapNetworkError(error);
+      if (mapped instanceof ServiceUnavailableException || mapped instanceof GatewayTimeoutException) {
+        this.metrics?.recordOperationalEvent('integration_failure', 'receitaws');
+        this.alerts?.evaluate();
+      }
       await this.auditLookup(principal, cnpj, `failed_${mapped.getStatus()}`);
       throw mapped;
     }
 
-    cache.set(cnpj, { expiresAt: Date.now() + CACHE_TTL_MS, value: record });
+    this.cache.set(cnpj, { expiresAt: Date.now() + CACHE_TTL_MS, value: record });
     await this.auditLookup(principal, cnpj, 'success');
     return record;
   }
 
   private mapNetworkError(error: unknown): HttpException {
     if (error instanceof HttpException) return error;
+    if (error instanceof CircuitOpenError) return new ServiceUnavailableException('A ReceitaWS está temporariamente indisponível após falhas repetidas. Tente novamente mais tarde.');
     if (error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')) {
       return new GatewayTimeoutException('A consulta à ReceitaWS excedeu o tempo de resposta.');
     }

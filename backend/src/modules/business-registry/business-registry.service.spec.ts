@@ -1,4 +1,6 @@
-import { GatewayTimeoutException, NotFoundException } from '@nestjs/common';
+import { BadGatewayException, GatewayTimeoutException, NotFoundException } from '@nestjs/common';
+import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { ConfigService } from '@nestjs/config';
 import { AuthPrincipal } from '../../common/auth-principal';
 import { AuditLogWriter } from '../audit/audit-log-writer.service';
 import { BusinessRegistryService } from './business-registry.service';
@@ -15,7 +17,9 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 describe('BusinessRegistryService', () => {
-  const audit = { write: jest.fn().mockResolvedValue(undefined) } as unknown as AuditLogWriter;
+  const audit = {
+    write: jest.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined)
+  } as unknown as AuditLogWriter;
   let service: BusinessRegistryService;
 
   beforeEach(() => {
@@ -66,5 +70,75 @@ describe('BusinessRegistryService', () => {
     const fetch = jest.spyOn(global, 'fetch').mockRejectedValue(timeout);
     await expect(service.lookup('12.ABC.345/01DE-35', principal)).rejects.toBeInstanceOf(GatewayTimeoutException);
     fetch.mockRestore();
+  });
+
+  it('rejects an invalid CNPJ returned by the provider', async () => {
+    const fetch = jest.spyOn(global, 'fetch').mockResolvedValue(jsonResponse({
+      status: 'OK', cnpj: '11.378.117/0001-21', nome: 'Cadastro inválido'
+    }));
+
+    await expect(service.lookup('12.ABC.345/01DE-35', principal)).rejects.toBeInstanceOf(BadGatewayException);
+    expect(audit.write).toHaveBeenCalledWith(expect.objectContaining({
+      metadata: expect.objectContaining({ result: 'failed_502' })
+    }));
+    fetch.mockRestore();
+  });
+
+  it('rejects a valid but different CNPJ returned by the provider', async () => {
+    const fetch = jest.spyOn(global, 'fetch').mockResolvedValue(jsonResponse({
+      status: 'OK', cnpj: '11.378.117/0001-20', nome: 'Cadastro divergente'
+    }));
+
+    await expect(service.lookup('12.ABC.345/01DE-35', principal)).rejects.toBeInstanceOf(BadGatewayException);
+    fetch.mockRestore();
+  });
+
+  it('retries a transient network failure once and succeeds without a real network call', async () => {
+    const fetch = jest.spyOn(global, 'fetch')
+      .mockRejectedValueOnce(new TypeError('temporary network failure'))
+      .mockResolvedValueOnce(jsonResponse({ status: 'OK', cnpj: '11378117000120', nome: 'Cadastro de teste' }));
+    await expect(service.lookup('11.378.117/0001-20', principal)).resolves.toMatchObject({ legalName: 'Cadastro de teste' });
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch.mock.calls[0][1]?.signal).toBeDefined();
+    fetch.mockRestore();
+  });
+
+  it('does not retry a permanent invalid provider response', async () => {
+    const fetch = jest.spyOn(global, 'fetch').mockResolvedValue(jsonResponse({
+      status: 'OK', cnpj: '11378117000121', nome: 'Cadastro divergente'
+    }));
+    await expect(service.lookup('11.378.117/0001-20', principal)).rejects.toBeInstanceOf(BadGatewayException);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    fetch.mockRestore();
+  });
+
+  it('retries timeout failures and returns an explicit gateway timeout', async () => {
+    const timeout = new Error('synthetic timeout');
+    timeout.name = 'TimeoutError';
+    const fetch = jest.spyOn(global, 'fetch').mockRejectedValue(timeout);
+    await expect(service.lookup('11.378.117/0001-20', principal)).rejects.toBeInstanceOf(GatewayTimeoutException);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    fetch.mockRestore();
+  });
+
+  it('opens the circuit after consecutive upstream failures and permits recovery after the window', async () => {
+    jest.useFakeTimers();
+    const config = { get: (_key: string, fallback?: string) => ({
+      UPSTREAM_MAX_ATTEMPTS: '1', UPSTREAM_CIRCUIT_FAILURES: '2', UPSTREAM_CIRCUIT_RECOVERY_MS: '100'
+    } as Record<string, string>)[_key] ?? fallback } as unknown as ConfigService;
+    service = new BusinessRegistryService(audit, config);
+    const fetch = jest.spyOn(global, 'fetch')
+      .mockResolvedValueOnce(new Response(null, { status: 503 }))
+      .mockResolvedValueOnce(new Response(null, { status: 503 }))
+      .mockResolvedValueOnce(jsonResponse({ status: 'OK', cnpj: '11378117000120', nome: 'Recuperada' }));
+    await expect(service.lookup('11.378.117/0001-20', principal)).rejects.toThrow();
+    await expect(service.lookup('11.378.117/0001-20', principal)).rejects.toThrow();
+    await expect(service.lookup('11.378.117/0001-20', principal)).rejects.toThrow('temporariamente indisponível após falhas repetidas');
+    expect(fetch).toHaveBeenCalledTimes(2);
+    jest.advanceTimersByTime(101);
+    await expect(service.lookup('11.378.117/0001-20', principal)).resolves.toMatchObject({ legalName: 'Recuperada' });
+    expect(fetch).toHaveBeenCalledTimes(3);
+    fetch.mockRestore();
+    jest.useRealTimers();
   });
 });
