@@ -29,11 +29,11 @@ export interface PrivacyEraseResult {
   retained: string[];
 }
 
-/**
- * O modelo User não possui uma coluna de nome. O identificador abaixo é usado
- * tanto para o e-mail persistido quanto para o registro de auditoria, sem
- * guardar o valor original e sem permitir reversão pelo serviço.
- */
+
+
+
+
+
 export function deterministicAnonymization(userId: string): { email: string; name: string } {
   const digest = createHash('sha256').update(`gft-inteligente:privacy:${userId}`, 'utf8').digest('hex');
   return {

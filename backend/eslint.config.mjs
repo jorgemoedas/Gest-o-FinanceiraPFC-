@@ -29,8 +29,8 @@ export default [
       reportUnusedDisableDirectives: 'warn'
     },
     rules: {
-      // Qualidade estrutural: avisos permitem a execução do lint durante a
-      // redução gradual do débito técnico sem esconder as violações.
+
+
       'sonarjs/cyclomatic-complexity': ['warn', { threshold: 10 }],
       'sonarjs/cognitive-complexity': ['warn', 15],
       'max-depth': ['warn', 4],

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# Homologação de produção do GFT Inteligente.
-# O modo padrão sempre executa as verificações estáticas. Se houver Docker ou
-# Podman com Compose, também constrói e exercita os dois serviços.
+
+
+
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 FRONTEND_IMAGE="${FRONTEND_IMAGE:-gftauth-frontend:homologacao}"
@@ -101,8 +101,8 @@ static_checks() {
   require_text backend/src/modules/health/health.controller.ts "@Get\('ready'\)" 'GET /health/ready público'
   require_text next.config.ts "output:[[:space:]]*'standalone'" 'saída standalone do Next'
 
-  # Valores de credenciais não podem aparecer nos arquivos de configuração de
-  # contêiner. Nomes de variáveis e placeholders ${...} são permitidos.
+
+
   if grep -EIn --exclude='homologar.sh' \
       '(password[[:space:]]*[:=][[:space:]]*[^${[:space:]]|token[[:space:]]*[:=][[:space:]]*[^${[:space:]]|BEGIN (RSA|OPENSSH|PRIVATE) KEY|AKIA[0-9A-Z]{16})' \
       Dockerfile backend/Dockerfile docker-compose.yml .dockerignore backend/.dockerignore >/dev/null; then

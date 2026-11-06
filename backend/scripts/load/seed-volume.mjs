@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-// Cria um tenant sintético isolado e insere volume de lançamentos para medir latência.
-// Uso: node scripts/load/seed-volume.mjs [quantidade]
-// Requer DATABASE_URL e DATABASE_CA_CERT no ambiente (backend/.env).
+import path from 'node:path';
+
+
+
 
 import { randomBytes } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
@@ -17,7 +17,7 @@ const bcrypt = require('bcrypt');
 const { postgresAdapterOptions } = await import('../../dist/database/postgres-connection.js');
 
 const SCHEMA = 'gft_inteligente';
-const CREDENTIALS_PATH = join(tmpdir(), 'gft-load-volume.json');
+const CREDENTIALS_PATH = path.join(tmpdir(), 'gft-load-volume.json');
 const EMAIL = 'carga-volume@exemplo.invalid';
 const COMPANY_NAME = 'Medicao de carga (sintetica)';
 

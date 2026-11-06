@@ -37,7 +37,6 @@ function nextMonthKey(monthKey: string, offset: number): string {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
 }
 
-/** Calculates the least-squares line using the observation position as x. */
 export function linearTrend(values: number[]): LinearTrend | null {
   if (values.length < 3 || values.some((value) => !isFiniteNumber(value))) return null;
 
@@ -58,10 +57,10 @@ export function linearTrend(values: number[]): LinearTrend | null {
   return Number.isFinite(slope) && Number.isFinite(intercept) ? { slope, intercept } : null;
 }
 
-/**
- * Returns a multiplicative calendar-month index. Months without a value use a neutral
- * factor, but are still kept in the twelve-position result so consumers can render it.
- */
+
+
+
+
 export function seasonalIndex(monthly: MonthlyValue[]): SeasonalIndexResult {
   const valid = monthly.filter((item) => calendarMonth(item.monthKey) !== null && isFiniteNumber(item.value));
   const monthsObserved = new Set(valid.map((item) => item.monthKey)).size;
@@ -99,7 +98,6 @@ export function seasonalIndex(monthly: MonthlyValue[]): SeasonalIndexResult {
   };
 }
 
-/** Projects the next calendar months and clamps any negative/non-finite result to zero. */
 export function projectNextWithSeasonalIndex(history: MonthlyValue[], months: number, index: number[] | null): MonthlyValue[] {
   if (months <= 0 || !Number.isInteger(months)) return [];
   const validHistory = history.filter((item) => monthDate(item.monthKey) !== null && isFiniteNumber(item.value));

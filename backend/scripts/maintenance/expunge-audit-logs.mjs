@@ -14,8 +14,8 @@ async function createMaintenancePrisma() {
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) throw new Error('DATABASE_URL não configurada.');
 
-  // O build do backend fornece o PrismaClient gerado com o schema gft_inteligente.
-  // A rotina não imprime a URL, o certificado nem qualquer credencial.
+
+
   const [{ PrismaPg }, { PrismaClient }, { postgresAdapterOptions }] = await Promise.all([
     import('@prisma/adapter-pg'),
     import('../../dist/generated/prisma/client.js'),

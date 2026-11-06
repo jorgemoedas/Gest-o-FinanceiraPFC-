@@ -269,11 +269,9 @@ model FinanceTransaction {
   @@index([companyId, counterpartyId])
   @@index([companyId, recurrenceId])
   @@index([companyId, occurredAt])
-  @@index([companyId, occurredAt(sort: Desc), createdAt(sort: Desc)])
   @@index([companyId, type, occurredAt])
   @@index([companyId, category, occurredAt])
   @@index([companyId, status, dueAt])
-  @@index([companyId, status, occurredAt])
   @@index([companyId, adjustmentKind, occurredAt])
   @@schema("gft_inteligente")
 }

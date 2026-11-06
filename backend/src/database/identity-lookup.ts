@@ -1,10 +1,10 @@
 import type { Prisma } from '../generated/prisma/client';
 
-/**
- * Consultas que o login precisa fazer antes de existir empresa no contexto.
- * Todas passam pelas funções SECURITY DEFINER criadas na migration
- * 20261021190000_identity_hardening e devolvem apenas as colunas usadas.
- */
+
+
+
+
+
 
 export interface AuthUserLookup {
   id: string;

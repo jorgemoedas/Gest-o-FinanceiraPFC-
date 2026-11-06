@@ -1,18 +1,18 @@
 #!/usr/bin/env node
-/**
- * Integração isolada da retenção de auditoria.
- *
- * O script cria um schema efêmero, nunca toca gft_inteligente e usa a
- * credencial administrativa de DATABASE_URL somente para DDL/DML de teste e
- * para executar o núcleo do expurgo. A conexão em SET ROLE gft_app só pode
- * ler/inserir na tabela sintética; UPDATE e DELETE devem ser negados.
- *
- * Executar a partir de backend:
- *   node scripts/maintenance/test-expunge-audit-logs-integration.mjs
- */
+import path from 'node:path';
+
+
+
+
+
+
+
+
+
+
+
 import crypto from 'node:crypto';
 import { createRequire } from 'node:module';
-import { resolve } from 'node:path';
 
 const require = createRequire(import.meta.url);
 const { Pool } = require('pg');
@@ -24,7 +24,7 @@ require('ts-node').register({
 const { postgresAdapterOptions } = require('../../src/database/postgres-connection.ts');
 const { calculateCutoffDate, expungeAuditLogs } = require('./expunge-audit-logs-core.cjs');
 
-dotenv.config({ path: process.env.DOTENV_CONFIG_PATH ?? resolve(process.cwd(), '.env'), quiet: true });
+dotenv.config({ path: path.resolve(process.cwd(), '.env'), quiet: true });
 
 function quoteIdentifier(identifier) {
   if (!/^gft_test_audit_[a-f0-9]{12}$/.test(identifier)) {

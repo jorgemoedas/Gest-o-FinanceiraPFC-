@@ -39,9 +39,9 @@ describe('FiscalCalculationService — Simples Nacional com decimal.js', () => {
           it(`faixa ${band.band}: limite ${boundary} ${rbt12} — esperado da ${source}`, () => {
             const result = service.calculateSimples({ annex, rbt12, monthlyRevenue: '1234.56' });
 
-            // Os números esperados de faixa, alíquota nominal e PD são transcrições
-            // da tabela oficial; a alíquota efetiva é a fórmula oficial aplicada
-            // independentemente no teste, sem Number ou arredondamento intermediário.
+
+
+
             expect(result.band).toBe(band.band);
             expect(result.nominalRatePercent).toBe(new Decimal(band.nominalRatePercent).toFixed(2));
             expect(result.deduction).toBe(new Decimal(band.deduction).toFixed(2));
@@ -64,8 +64,8 @@ describe('FiscalCalculationService — Simples Nacional com decimal.js', () => {
       effectiveRate: '0.06728',
       monthlyTax: '672.80'
     });
-    // (500.000 × 9,50% − 13.860) / 500.000 = 0,06728 = 6,728%;
-    // 10.000 × 0,06728 = 672,80. Origem: Anexo I/LC 123, fórmula do art. 18.
+
+
   });
 
   it('faz memória completa do Anexo III em RBT12 de R$ 1.000.000,00 — esperado oficial: efetiva 12,436% e DAS demonstrativo R$ 6.218,00', () => {
@@ -78,8 +78,8 @@ describe('FiscalCalculationService — Simples Nacional com decimal.js', () => {
       effectiveRate: '0.12436',
       monthlyTax: '6218.00'
     });
-    // (1.000.000 × 16% − 35.640) / 1.000.000 = 0,12436 = 12,436%;
-    // 50.000 × 0,12436 = 6.218,00. Origem: Anexo III/LC 123, fórmula do art. 18.
+
+
   });
 
   it('faz memória completa do Anexo V com centavos — esperado oficial: efetiva 19,895% e DAS demonstrativo R$ 2.456,17', () => {
@@ -92,14 +92,14 @@ describe('FiscalCalculationService — Simples Nacional com decimal.js', () => {
       effectiveRate: '0.19895',
       monthlyTax: '2456.17'
     });
-    // (2.000.000 × 23% − 62.100) / 2.000.000 = 0,19895 = 19,895%;
-    // 12.345,67 × 0,19895 = 2.456,167?; half-up na saída = 2.456,17.
+
+
   });
 
   it('arredonda apenas o tributo final por half-up, sem arredondar a alíquota efetiva', () => {
     const result = service.calculateSimples({ annex: 'I', rbt12: '180000.00', monthlyRevenue: '0.13' });
     expect(result.effectiveRatePercent).toBe('4');
-    expect(result.monthlyTax).toBe('0.01'); // 0,13 × 4% = 0,0052, half-up em centavos.
+    expect(result.monthlyTax).toBe('0.01');
   });
 
   it.each([
@@ -131,7 +131,7 @@ describe('FiscalCalculationService — MEI/SIMEI 2026 com decimal.js', () => {
       iss: '5.00',
       monthlyDas: '87.05'
     });
-    // Fonte: Receita Federal, atualização MEI 2026: INSS 81,05 + ICMS 1,00 + ISS 5,00.
+
   });
 
   it('aceita centavos dentro do limite e calcula só a parcela de INSS quando não há ICMS/ISS', () => {
@@ -148,7 +148,7 @@ describe('FiscalCalculationService — MEI/SIMEI 2026 com decimal.js', () => {
       isIssTaxpayer: true
     });
     expect(result).toMatchObject({ annualLimit: '251600.00', inss: '194.52', icms: '1.00', iss: '5.00', monthlyDas: '200.52' });
-    // Fonte: Perguntas e Respostas MEI/Simei da Receita Federal e notícia MEI 2026.
+
   });
 
   it.each([

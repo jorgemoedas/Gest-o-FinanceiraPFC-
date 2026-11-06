@@ -62,12 +62,12 @@ export function isSameOriginMutation(request: NextRequest): boolean {
     }
   }
 
-  // O proxy pode normalizar Origin; o caminho interno exige Sec-Fetch-Site same-origin.
+
   if (requestOrigin === publicOrigin) return true;
   if (fetchSite !== 'same-origin' || !host) return false;
 
   try {
-    // TLS termina no proxy; a conexão interna usa HTTP.
+
     const internalOrigin = new URL(`http://${host}`).origin;
     return requestOrigin === internalOrigin;
   } catch {
@@ -94,7 +94,7 @@ export function isSameOriginRequest(request: NextRequest): boolean {
 }
 
 export function accessCookieOptions(maxAge: number) {
-  // Desabilitar Secure somente em desenvolvimento local com HTTP.
+
   const secure = process.env.AUTH_COOKIE_SECURE !== 'false';
   return {
     httpOnly: true,

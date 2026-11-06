@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-/**
- * Verificação autorizada de segurança para a API GFT Inteligente.
- * Executar a partir de qualquer diretório: node backend/scripts/security/owasp-checks.mjs
- * Credenciais da empresa de volume e segredos do processo da API ficam apenas em memória.
- */
+import path from 'node:path';
+
+
+
+
+
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
@@ -13,7 +13,7 @@ import { createRequire } from 'node:module';
 
 const BASE = process.env.GFT_API_BASE_URL || 'http://127.0.0.1:3001';
 const API = `${BASE.replace(/\/$/, '')}/api/v1`;
-const FIXTURE_CREDENTIALS = join(tmpdir(), 'gft-load-volume.json');
+const FIXTURE_CREDENTIALS = path.join(tmpdir(), 'gft-load-volume.json');
 const DB_SCHEMA = 'gft_inteligente';
 const require = createRequire(import.meta.url);
 const { Pool } = require('pg');
@@ -77,7 +77,7 @@ function findApiProcessEnv() {
         if (split > 0) env[pair.slice(0, split)] = pair.slice(split + 1);
       }
       if (env.DATABASE_URL && env.DATABASE_CA_CERT) return env;
-    } catch { /* processo alheio/encerrado: não registrar conteúdo */ }
+    } catch {  }
   }
   return null;
 }
@@ -118,7 +118,7 @@ async function request(path, options = {}) {
   });
   const text = await response.text();
   let json = null;
-  try { json = JSON.parse(text); } catch { /* não JSON */ }
+  try { json = JSON.parse(text); } catch {  }
   return { status: response.status, text, json, headers: response.headers };
 }
 
@@ -129,7 +129,7 @@ async function waitForServiceReady(attempts = 6) {
     try {
       const readiness = await requestOutsidePrefix('/health/ready');
       if (readiness.status === 200 && readiness.json?.status === 'ready') return true;
-    } catch { /* o processo pode ainda estar iniciando */ }
+    } catch {  }
     if (attempt < attempts - 1) await new Promise((resolve) => setTimeout(resolve, 2000));
   }
   return false;
@@ -245,7 +245,7 @@ function runStaticCategoryChecks() {
     result('Integridade do lockfile e dos artefatos de dependência', 'Conferir hashes de dependências', 'Lockfile não pôde ser lido; detalhes omitidos', 'inconclusivo', 'A08');
   }
 
-  // A prova inspeciona o log real da API; nunca substitui evidência por log sintético.
+
   const logPath = process.env.GFT_SECURITY_LOG_PATH?.trim();
   try {
     if (!logPath) throw new Error('Log real não configurado');
@@ -320,7 +320,7 @@ function authResponseValid(json) {
 }
 
 async function createDatabasePool() {
-  dotenv.config({ path: process.env.DOTENV_CONFIG_PATH ?? join(process.cwd(), '.env'), quiet: true });
+  dotenv.config({ path: path.resolve(process.cwd(), '.env'), quiet: true });
   apiEnv = { ...process.env, ...(findApiProcessEnv() || {}) };
   if (!apiEnv?.DATABASE_URL || !apiEnv?.DATABASE_CA_CERT) return false;
   const adapterOptions = postgresAdapterOptions(apiEnv.DATABASE_URL, apiEnv.DATABASE_CA_CERT);
@@ -339,7 +339,7 @@ async function cleanupFixture() {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    // Limpeza limitada estritamente aos UUIDs retornados pelo cadastro do fixture.
+
     if (aSyntheticCounterpartyId) {
       await client.query(`DELETE FROM "${DB_SCHEMA}"."AuditLog" WHERE "entityId" = $1 AND "action" = 'FINANCE_COUNTERPARTY_CREATED'`, [aSyntheticCounterpartyId]);
       await client.query(`DELETE FROM "${DB_SCHEMA}"."FinanceCounterparty" WHERE "id" = $1`, [aSyntheticCounterpartyId]);
@@ -427,7 +427,7 @@ async function main() {
     try { credentials = JSON.parse(fs.readFileSync(FIXTURE_CREDENTIALS, 'utf8')); }
     catch { credentials = null; }
     if (!credentials?.email || !credentials?.password) {
-      result('Autenticação da empresa de volume', 'Carregar credenciais apenas em memória do diretório temporário e autenticar', 'Arquivo ausente ou formato inválido; nenhum valor impresso', 'inconclusivo');
+      result('Autenticação da empresa de volume', 'Carregar credenciais apenas em memória de ${TMPDIR:-/tmp}/gft-load-volume.json e autenticar', 'Arquivo ausente ou formato inválido; nenhum valor impresso', 'inconclusivo');
     } else {
       aLogin = await request('/auth/login', { method: 'POST', body: { email: credentials.email, password: credentials.password } });
       if ((aLogin.status === 200 || aLogin.status === 201) && aLogin.json?.accessToken) {
@@ -490,7 +490,7 @@ async function main() {
       const corsRejected = cors.status >= 400;
       result('Origem HTTP estranha', 'GET autenticado em /finance/transactions com Origin https://origem-estranha.invalid', `HTTP ${cors.status}; Access-Control-Allow-Origin=${allowOrigin || 'ausente'}`, corsRejected ? 'aprovado' : 'reprovado');
 
-      // Não há GET /finance/transactions/:id no controlador; não fazer PATCH/DELETE em A.
+
       if (aTransactionId) {
         const byId = await request(`/finance/transactions/${encodeURIComponent(aTransactionId)}`, { token: tokenA });
         result('Lançamento de A consultado por ID com sessão A (rota de detalhe)', 'GET /finance/transactions/{id}; somente leitura', `${summarizeResponse(byId)}; controlador não define essa rota, portanto o registro não é publicado por detalhe`, byId.status === 404 ? 'aprovado' : byId.status === 200 ? 'aprovado' : 'inconclusivo');
@@ -529,7 +529,7 @@ async function main() {
       result('Cadastro recusa senha fraca', 'POST /auth/register com senha abaixo do mínimo', 'Versões vigentes não disponíveis no ambiente do processo; chamada não enviada', 'inconclusivo');
     }
 
-    // Sem pool privilegiado verificado não se cria usuário/tenant, pois a remoção não seria garantida.
+
     if (dbAvailable && tlsVerified && apiEnv?.TERMS_VERSION && apiEnv?.PRIVACY_POLICY_VERSION) {
       fixtureMarker = crypto.randomBytes(8).toString('hex');
       const syntheticEmail = `owasp-${crypto.randomUUID()}@example.invalid`;
@@ -542,9 +542,9 @@ async function main() {
       bRegisterResponse = serviceReady
         ? await requestWithTransientRetry('/auth/register', { method: 'POST', body: registrationBody })
         : { status: 503, text: '', json: null, headers: new Headers() };
-      // Se a resposta expirou depois do commit, o retry pode receber conflito.
-      // O login com as mesmas credenciais recupera os UUIDs retornados pela API
-      // e mantém a limpeza limitada ao fixture efetivamente criado.
+
+
+
       if (!(bRegisterResponse.status === 201 && bRegisterResponse.json?.user?.id && bRegisterResponse.json?.user?.companyId)) {
         const recovered = await requestWithTransientRetry('/auth/login', {
           method: 'POST', body: { email: syntheticEmail, password: syntheticPassword }
@@ -643,7 +643,7 @@ async function main() {
         result('Tentativa de evento de auditoria A por ID', 'GET /audit-logs/{ID-A}; leitura apenas', `${summarizeResponse(auditById)}; 404 quando não existe rota de detalhe significa que o evento não é exposto por ID`, auditById.status === 404 || auditById.status === 401 || auditById.status === 403 ? 'aprovado' : 'reprovado');
       }
 
-      // Injeção em busca: parâmetros codificados pelo URLSearchParams/encodeURIComponent.
+
       const searchPayloads = ["' OR 1=1--", "'; DROP TABLE", '%', '_'];
       for (const payload of searchPayloads) {
         const r = await request(`/finance/transactions?search=${encodeURIComponent(payload)}&limit=100`, { token: tokenB });
@@ -681,7 +681,7 @@ async function main() {
       if (longDescription.status === 201 && longDescription.json?.id) bTransactionIds.add(longDescription.json.id);
       result('Descrição acima do limite', 'POST /finance/transactions com 161 caracteres (máximo DTO: 160)', `${summarizeResponse(longDescription)}; detalhe interno exposto=${containsInternalError(longDescription.text)}`, longDescription.status === 400 && !containsInternalError(longDescription.text) ? 'aprovado' : 'reprovado');
 
-      // Registro e monitoramento: verifica ator, data e operação, sem mostrar IDs.
+
       const auditChecks = ['AUTH_REGISTERED', 'FINANCE_COUNTERPARTY_CREATED', 'FINANCE_TRANSACTION_CREATED'].map((action) => {
         const entry = auditItemsB.find((x) => x.action === action && x.actorUserId === userBId && Number.isFinite(Date.parse(x.createdAt)));
         return { action, found: Boolean(entry), actorAndDate: Boolean(entry) };
@@ -716,9 +716,9 @@ async function main() {
     }
     result('Auditoria de alteração de vínculo empresarial', 'Localizar operação/rota de alteração de CompanyMembership nos controladores lidos', 'Não foi encontrada operação pública de alteração de vínculo; a superfície de mutação não existe e nenhuma associação preexistente foi alterada', 'aprovado');
 
-    // O notifier padrão não envia e-mail: a API oculta o token em texto claro.
-    // Verificamos a geração/rotação pelo hash persistido e pela invalidação anterior;
-    // não se lê nem se registra o hash, que nunca é usado como credencial de replay.
+
+
+
     if (fixtureReady) {
       const resetKnown = await request('/auth/password-reset', { method: 'POST', body: { email: `owasp-reset-${crypto.randomUUID()}@example.invalid` } });
       const resetFixture = await request('/auth/password-reset', { method: 'POST', body: { email: bRegisterResponse.json.user.email } });
@@ -737,9 +737,9 @@ async function main() {
       const resetSource = fs.readFileSync(new URL('../../src/modules/auth/password-reset.service.ts', import.meta.url), 'utf8');
       const secureResetCode = resetSource.includes('randomBytes(32).toString(\'base64url\')') && resetSource.includes("createHash('sha256')") && resetSource.includes('token.usedAt ||') && resetSource.includes('updateMany({\n        where: { userId: user.id, usedAt: null');
       result('Token de reset imprevisível e não reutilizável', 'Usar duas vezes a rota de reset da fixture; conferir somente hashes no DB e invalidação de token anterior; validar fonte', `HTTP segundo reset=${resetAgain.status}; hashes SHA-256 distintos=${allHashesAreSha256 && hashesAreDistinct}; token anterior invalidado=${previousInvalidated}; token atual ativo=${latestIsUsable}; código gera 256 bits aleatórios e rejeita usedAt=${secureResetCode}; plaintext/hashes omitidos`, resetFixture.status === 201 && resetAgain.status === 201 && allHashesAreSha256 && hashesAreDistinct && previousInvalidated && latestIsUsable && secureResetCode ? 'aprovado' : 'reprovado');
-      // Fixture de entrega: usa o serviço de produção, Prisma real e notifier
-      // restrito a esta suíte. Tokens legítimos ficam somente em memória; não
-      // há endpoint de debug, substituição de hash ou token fabricado por SQL.
+
+
+
       const { PrismaService } = require('../../dist/database/prisma.service.js');
       const { PasswordResetService } = require('../../dist/modules/auth/password-reset.service.js');
       const { ConfigService } = require('@nestjs/config');
@@ -776,7 +776,7 @@ async function main() {
         result('Replay de token legítimo de redefinição', 'Emitir token pelo serviço original, confirmar pela API e repetir exatamente o mesmo token válido já consumido', `primeira confirmação HTTP=${confirmed.status}; replay HTTP=${replay.status}; consumo persistido=${Boolean(reused.rows[0]?.usedAt)}; detalhes internos=${containsInternalError(replay.text)}`, confirmedAndRejected ? 'aprovado' : 'reprovado', 'A02');
         const expiredResetToken = await issue();
         const expiredHash = crypto.createHash('sha256').update(expiredResetToken, 'utf8').digest('hex');
-        // Avança somente o relógio da fixture legítima, sem fabricar credencial.
+
         await pool.query(`UPDATE "${DB_SCHEMA}"."PasswordResetToken" SET "expiresAt" = $1 WHERE "userId" = $2 AND "tokenHash" = $3`, [new Date(Date.now() - 1000), userBId, expiredHash]);
         const expiredReplay = await request('/auth/password-reset/confirm', { method: 'POST', body: { token: expiredResetToken, newPassword } });
         const expiryRejected = expiredReplay.status === 400 && revokedReplay.status === 400 && !containsInternalError(expiredReplay.text) && !containsInternalError(revokedReplay.text);
@@ -790,7 +790,7 @@ async function main() {
       result('Replay de token legítimo de redefinição', 'Confirmar e repetir token legítimo em fixture', 'Fixture indisponível; token legítimo não gerado', 'inconclusivo');
     }
 
-    // Janela deliberada: o primeiro login A não pode consumir a cota da prova 5+1.
+
     await new Promise((resolve) => setTimeout(resolve, 61000));
     if (credentials?.email) {
       const firstFive = [];
@@ -813,7 +813,7 @@ async function main() {
     try { quotaDoublePassed = await runCnpjQuotaDouble(); } catch { quotaDoublePassed = false; }
     result('Limite de consultas CNPJ', 'Executar quatro consultas a CNPJs sintéticos contra dublê local da ReceitaWS, sem tráfego externo', `dublê recebeu três chamadas upstream=${quotaDoublePassed}; quarta chamada recusada com 429=${quotaDoublePassed}`, quotaDoublePassed ? 'aprovado' : 'reprovado');
   } catch (error) {
-    // Erros da própria suíte nunca registram URL de conexão, credenciais, tokens ou stack trace.
+
     result('Execução geral da suíte', 'Executar verificações em modo controlado', `Falha operacional ${error?.name || 'Error'}; detalhe e stack omitidos por segurança`, 'inconclusivo');
   } finally {
     if (pool && ((userBId && companyBId) || aSyntheticCounterpartyId)) {

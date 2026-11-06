@@ -50,7 +50,7 @@ export function postgresAdapterOptions(databaseUrl: string, caCertificate?: stri
   }
 
   const ca = normalizeCaCertificate(caCertificate);
-  // node-postgres otherwise lets SSL query parameters override the `ssl` object.
+
   for (const parameter of ['sslmode', 'sslrootcert', 'sslcert', 'sslkey']) {
     parsed.searchParams.delete(parameter);
   }

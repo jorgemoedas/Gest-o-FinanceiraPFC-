@@ -1,18 +1,18 @@
 #!/usr/bin/env node
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-// Rode o backend separado com URLs inacessíveis antes de executar este roteiro:
-// RECEITAWS_API_BASE_URL=http://127.0.0.1:9/v1/cnpj/
-// GEMINI_INTERACTIONS_URL=http://127.0.0.1:9/gemini
-// UPSTREAM_MAX_ATTEMPTS=1 UPSTREAM_CIRCUIT_FAILURES=3 ALERT_INTEGRATION_FAILURES_THRESHOLD=1 ALERT_SILENCE_SECONDS=300
-// Uso: node scripts/load/simulate-upstream-failure.mjs --cnpj=11378117000120
+import path from 'node:path';
+
+
+
+
+
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 const BASE_URL = (process.env.LOAD_BASE_URL ?? 'http://127.0.0.1:3001/api/v1').replace(/\/+$/, '');
 const ORIGIN = process.env.LOAD_ORIGIN ?? 'http://localhost:3000';
-const credentialsPath = process.env.LOAD_CREDENTIALS ?? join(tmpdir(), 'gft-load-volume.json');
-const outputPath = process.env.LOAD_OUTPUT ?? join(tmpdir(), 'gft-upstream-failure.json');
+const credentialsPath = process.env.LOAD_CREDENTIALS ?? path.join(tmpdir(), 'gft-load-volume.json');
+const outputPath = process.env.LOAD_OUTPUT ?? path.join(tmpdir(), 'gft-upstream-failure.json');
 const metricsUrl = process.env.LOAD_METRICS_URL ?? `${BASE_URL.replace(/\/api\/v1$/, '')}/metrics`;
 const circuitCheckDelayMs = Math.max(0, Number(process.env.LOAD_CIRCUIT_CHECK_DELAY_MS ?? 65_000) || 0);
 const cnpj = process.argv.find((value) => value.startsWith('--cnpj='))?.slice(7) ?? '11378117000120';

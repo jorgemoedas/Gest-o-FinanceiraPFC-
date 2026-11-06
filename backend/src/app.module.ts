@@ -23,9 +23,9 @@ import { SecretsModule } from './common/secrets/secrets.module';
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnvironment }),
     SecretsModule,
     ObservabilityModule,
-    // Um limitador adicional declarado aqui passa a valer para todas as rotas, e
-    // não só para as que o nomeiam; por isso o limite de autenticação é definido
-    // na própria rota, sobre o balde padrão.
+
+
+
     ThrottlerModule.forRoot({ throttlers: [{ name: 'default', ttl: 60_000, limit: 60 }] }),
     PrismaModule,
     AuthModule,

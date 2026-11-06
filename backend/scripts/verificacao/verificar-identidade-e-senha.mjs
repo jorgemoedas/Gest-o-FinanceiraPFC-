@@ -46,7 +46,7 @@ await owner.connect();
 const userId = (await owner.query('SELECT id FROM gft_inteligente."User" WHERE email = $1', [email])).rows[0]?.id;
 check('conta localizada no banco', Boolean(userId));
 
-// Leitura como papel restrito, sem contexto de tenant.
+
 await owner.query('BEGIN');
 await owner.query('SET LOCAL ROLE gft_app');
 for (const table of TABLES) {
@@ -57,7 +57,7 @@ const lookup = await owner.query('SELECT email FROM gft_inteligente.auth_user_by
 check('função restrita resolve a conta pelo e-mail', lookup.rows.length === 1, `linhas=${lookup.rows.length}`);
 await owner.query('ROLLBACK');
 
-// Leitura como papel restrito com contexto do próprio titular.
+
 const companyId = (await owner.query('SELECT "companyId" FROM gft_inteligente."CompanyMembership" WHERE "userId" = $1 LIMIT 1', [userId])).rows[0].companyId;
 await owner.query('BEGIN');
 await owner.query('SET LOCAL ROLE gft_app');
@@ -68,7 +68,7 @@ const others = await owner.query('SELECT count(*)::int AS n FROM gft_inteligente
 check('nenhuma conta de terceiro é visível', others.rows[0].n === 0, `linhas=${others.rows[0].n}`);
 await owner.query('ROLLBACK');
 
-// Redefinição de senha ponta a ponta com token conhecido.
+
 const token = randomUUID();
 const tokenHash = createHash('sha256').update(token, 'utf8').digest('hex');
 const requested = await api('/auth/password-reset', { email });

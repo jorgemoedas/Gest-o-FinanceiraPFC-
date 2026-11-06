@@ -1,17 +1,17 @@
 #!/usr/bin/env node
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-// Mede latência (p50/p95/p99) do Dashboard, da listagem e do analítico com o volume já semeado.
-// O roteiro respeita o limite global de 60 requisições por minuto da própria aplicação:
-// por isso as requisições são enviadas em rodadas curtas, com pausa entre elas.
-// Uso: node scripts/load/measure-latency.mjs [rodadas]
+import path from 'node:path';
+
+
+
+
 
 import { readFileSync, writeFileSync } from 'node:fs';
 
 const BASE_URL = process.env.LOAD_BASE_URL ?? 'http://127.0.0.1:3001/api/v1';
 const ORIGIN = process.env.LOAD_ORIGIN ?? 'http://localhost:3000';
-const CREDENTIALS_PATH = process.env.LOAD_CREDENTIALS ?? join(tmpdir(), 'gft-load-volume.json');
-const OUTPUT_PATH = process.env.LOAD_OUTPUT ?? join(tmpdir(), 'gft-load-result.json');
+const CREDENTIALS_PATH = process.env.LOAD_CREDENTIALS ?? path.join(tmpdir(), 'gft-load-volume.json');
+const OUTPUT_PATH = process.env.LOAD_OUTPUT ?? path.join(tmpdir(), 'gft-load-result.json');
 
 const rodadas = Number(process.argv[2] ?? 15);
 const PAUSA_MS = 15000;

@@ -1,15 +1,14 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# Roteiro de backup/restauração para o schema da aplicação.
-# A restauração nunca aceita o schema da aplicação e só aceita destinos com
-# prefixo gft_restore_test. Não use este arquivo para sobrescrever produção.
+
+
+
 
 readonly APP_SCHEMA='gft_inteligente'
 readonly DEFAULT_TARGET_SCHEMA='gft_restore_test'
 readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly DEFAULT_ENV_FILE="$(cd -- "$SCRIPT_DIR/../.." && pwd)/.env"
-readonly DEFAULT_BACKUP_DIR="${BACKUP_DIR:-${TMPDIR:-${PWD}/.tmp}/gftauth-backups}"
 readonly TABLE_LABELS=(
   'usuarios'
   'empresas'
@@ -39,7 +38,7 @@ Uso:
   backup-restore-isolated.sh --restore-only BACKUP_FILE [TARGET_SCHEMA]
 
 O DATABASE_URL é carregado de backend/.env por padrão, sem ser impresso.
-BACKUP_DIR também pode ser informado por BACKUP_DIR; o padrão é `${TMPDIR:-.tmp}/gftauth-backups`.
+BACKUP_DIR também pode ser informado por BACKUP_DIR; o padrão é ${TMPDIR:-/tmp}/gftauth-backups.
 A restauração traduz o dump para um schema isolado. O destino precisa ser
 "gft_restore_test" ou começar por "gft_restore_test_"; gft_inteligente é recusado.
 USAGE
@@ -65,8 +64,8 @@ load_environment() {
   local env_file="${ENV_FILE:-$DEFAULT_ENV_FILE}"
   if [[ -f "$env_file" ]]; then
     set -a
-    # O arquivo é o backend/.env do projeto e pode conter valores citados.
-    # shellcheck disable=SC1090
+
+
     . "$env_file"
     set +a
   fi
@@ -129,7 +128,7 @@ assert_counts_match() {
 }
 
 run_dump() {
-  local backup_dir="${1:-$DEFAULT_BACKUP_DIR}"
+  local backup_dir="${1:-${BACKUP_DIR:-${TMPDIR:-/tmp}/gftauth-backups}}"
   local timestamp backup_file count_file error_log started_ms finished_ms
   umask 077
   mkdir -p -- "$backup_dir"
@@ -196,8 +195,8 @@ run_restore() {
   trap cleanup_isolated_on_exit EXIT
   started_ms="$(date +%s%3N)"
 
-  # Só este nome, previamente validado, pode ser descartado. O schema da
-  # aplicação não aparece em nenhum DROP deste roteiro.
+
+
   if ! psql_query "DROP SCHEMA IF EXISTS \"$target_schema\" CASCADE;" "$error_log" >/dev/null; then
     rm -f -- "$sql_file" "$translated_sql" "$error_log"
     fail 'não foi possível preparar o schema isolado.'
@@ -208,8 +207,8 @@ run_restore() {
     rm -f -- "$sql_file" "$translated_sql" "$error_log"
     fail 'não foi possível materializar o dump para restauração.'
   fi
-  # O dump é de um único schema. A substituição fica restrita ao identificador
-  # do schema (e não a substrings de nomes de tabelas ou a credenciais).
+
+
   perl -pe "s/(?<![A-Za-z0-9_])$APP_SCHEMA(?![A-Za-z0-9_])/$target_schema/g" \
     "$sql_file" >"$translated_sql"
 
@@ -252,10 +251,10 @@ main() {
       usage
       ;;
     --dump-only)
-      run_dump "${2:-$DEFAULT_BACKUP_DIR}"
+      run_dump "${2:-${BACKUP_DIR:-${TMPDIR:-/tmp}/gftauth-backups}}"
       ;;
     --run)
-      run_dump "${2:-$DEFAULT_BACKUP_DIR}"
+      run_dump "${2:-${BACKUP_DIR:-${TMPDIR:-/tmp}/gftauth-backups}}"
       run_restore "$DUMP_ARCHIVE" "$DEFAULT_TARGET_SCHEMA" "$DUMP_COUNT_FILE"
       ;;
     --restore-only)

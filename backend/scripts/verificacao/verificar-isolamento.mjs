@@ -4,8 +4,8 @@ import { postgresAdapterOptions } from '../../dist/database/postgres-connection.
 const SCHEMA = 'gft_inteligente';
 const adminDsn = process.env.DATABASE_URL;
 const ca = process.env.DATABASE_CA_CERT;
-// A aplicação usa a credencial da plataforma e assume o papel restrito dentro de
-// cada transação; o teste reproduz exatamente essa configuração.
+
+
 const PAPEL_LIMITADO = 'gft_app';
 
 const results = [];

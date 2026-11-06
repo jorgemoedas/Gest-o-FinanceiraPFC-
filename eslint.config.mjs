@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module';
 
-// Reutiliza as dependências ESLint versionadas do backend no monorepositório.
+
 const require = createRequire(new URL('./backend/package.json', import.meta.url));
 const tsParser = require('@typescript-eslint/parser');
 const tseslint = require('@typescript-eslint/eslint-plugin');

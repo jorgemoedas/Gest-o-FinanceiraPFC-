@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-// Executa EXPLAIN ANALYZE sem migração, usando o tenant do metadata da semeadura massiva.
-// Uso: node scripts/load/explain-plans.mjs --metadata=<arquivo-temporario>
+import path from 'node:path';
+
+
 
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -11,7 +11,7 @@ const { Client } = require('pg');
 const { postgresAdapterOptions } = await import('../../dist/database/postgres-connection.js');
 const SCHEMA = 'gft_inteligente';
 const metadataArgument = process.argv.find((value) => value.startsWith('--metadata='));
-const metadataPath = metadataArgument?.slice(11) ?? process.env.LOAD_METADATA ?? join(tmpdir(), 'gft-load-massive.json');
+const metadataPath = metadataArgument?.slice(11) ?? process.env.LOAD_METADATA ?? path.join(tmpdir(), 'gft-load-massive.json');
 const metadata = JSON.parse(readFileSync(metadataPath, 'utf8'));
 if (metadata.marker !== 'gft-load-massive-v1' || !metadata.companyId) throw new Error('Metadata de carga massiva inválido.');
 if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL ausente no ambiente.');

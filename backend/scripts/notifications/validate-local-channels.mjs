@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import path from 'node:path';
 import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 
@@ -15,8 +15,8 @@ function argument(name, fallback) {
   return index >= 0 ? process.argv[index + 1] : fallback;
 }
 
-const smtpOutput = argument('--smtp-output', join(tmpdir(), 'gft-smtp-message.eml'));
-const webhookOutput = argument('--webhook-output', join(tmpdir(), 'gft-webhook.json'));
+const smtpOutput = argument('--smtp-output', path.join(tmpdir(), 'gft-smtp-message.eml'));
+const webhookOutput = argument('--webhook-output', path.join(tmpdir(), 'gft-webhook.json'));
 const smtpPort = argument('--smtp-port', '2525');
 const webhookUrl = argument('--webhook-url', 'http://127.0.0.1:8099/alerts');
 const tokenProbe = 'token-obtido-do-email';

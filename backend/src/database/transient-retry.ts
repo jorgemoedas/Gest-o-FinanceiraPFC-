@@ -9,7 +9,7 @@ const DEFAULT_MAX_DELAY_MS = 1_000;
 
 export type ReadRetryOptions = {
   operation: string;
-  /** Deliberately required: automatic retry is safe only for idempotent reads. */
+
   writeSafety: 'read-only';
   maxAttempts?: number;
   baseDelayMs?: number;
@@ -69,11 +69,11 @@ function retryCode(error: unknown): string {
 
 const defaultSleep = (delayMs: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, delayMs));
 
-/**
- * Executa uma operação idempotente de leitura. Operações de escrita não devem
- * usar este helper: uma falha após COMMIT pode tornar a repetição ambígua e
- * duplicar o efeito. As escritas continuam transações sem retry automático.
- */
+
+
+
+
+
 export async function withTransientRetry<T>(operation: () => Promise<T>, options: ReadRetryOptions): Promise<T> {
   const maxAttempts = Math.max(1, options.maxAttempts ?? positiveEnvironmentInteger('DATABASE_RETRY_MAX_ATTEMPTS', DEFAULT_MAX_ATTEMPTS));
   const baseDelayMs = Math.max(0, options.baseDelayMs ?? positiveEnvironmentInteger('DATABASE_RETRY_BASE_DELAY_MS', DEFAULT_BASE_DELAY_MS));

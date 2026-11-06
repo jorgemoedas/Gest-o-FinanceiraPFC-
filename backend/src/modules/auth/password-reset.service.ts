@@ -16,7 +16,7 @@ export interface PasswordResetNotifier {
   send(input: { email: string; token: string; expiresAt: Date }): Promise<void>;
 }
 
-/** Default seguro: sem canal configurado, nunca finge que entregou a mensagem. */
+
 export class UnconfiguredPasswordResetNotifier implements PasswordResetNotifier {
   isConfigured(): boolean {
     return false;
@@ -41,7 +41,7 @@ export class PasswordResetService {
       return findAuthUserByEmail(tx, email);
     });
 
-    // A mesma resposta é usada para e-mails inexistentes para evitar enumeração.
+
     if (!user) return { delivered: false };
 
     const token = randomBytes(32).toString('base64url');
@@ -68,13 +68,13 @@ export class PasswordResetService {
           delivered = true;
           reason = 'delivery_sent';
         } catch {
-          // Falha do canal não deve revelar a existência da conta nem simular entrega.
+
           reason = 'delivery_failed';
         }
       }
 
-      // O fluxo é pré-autenticação e não tem empresa no contexto, então o
-      // evento é gravado sem leitura de retorno.
+
+
       await tx.auditLog.createMany({
         data: {
           actorUserId: user.id,

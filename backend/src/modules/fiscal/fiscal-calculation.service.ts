@@ -1,12 +1,12 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import Decimal from 'decimal.js';
 
-/**
- * Todas as entradas monetárias e alíquotas deste módulo são strings decimais.
- * Isso evita que um Number seja criado no limite do serviço ou no caminho de
- * cálculo. O Decimal é configurado com precisão muito superior à necessária
- * para o teto do Simples e só há arredondamento no valor monetário final.
- */
+
+
+
+
+
+
 const ExactDecimal = Decimal.clone({ precision: 50, rounding: Decimal.ROUND_HALF_UP });
 type Exact = InstanceType<typeof ExactDecimal>;
 
@@ -33,11 +33,11 @@ const BAND_4800000 = '4800000.00';
 
 export interface SimplesBand {
   readonly band: 1 | 2 | 3 | 4 | 5 | 6;
-  /** Inclusive lower boundary, represented as decimal text. */
+
   readonly lower: string;
-  /** Inclusive upper boundary, represented as decimal text. */
+
   readonly upper: string;
-  /** Nominal rate in percentage points, not a fraction. */
+
   readonly nominalRatePercent: string;
   readonly deduction: string;
 }
@@ -87,9 +87,9 @@ export const SIMPLES_TABLES: Readonly<Record<SimplesAnnex, readonly SimplesBand[
 
 export interface CalculateSimplesInput {
   annex: SimplesAnnex;
-  /** Receita bruta acumulada nos 12 meses anteriores (RBT12). */
+
   rbt12: string;
-  /** Receita bruta do período de apuração sobre a qual incide a alíquota. */
+
   monthlyRevenue: string;
 }
 
@@ -101,23 +101,23 @@ export interface SimplesCalculationResult {
   band: SimplesBand['band'];
   nominalRatePercent: string;
   deduction: string;
-  /** Percentage points, retained as a decimal string without intermediate rounding. */
+
   effectiveRatePercent: string;
-  /** Fractional rate, retained as a decimal string without intermediate rounding. */
+
   effectiveRate: string;
-  /** Monthly tax rounded once, to two decimal places, with half-up rounding. */
+
   monthlyTax: string;
   rounding: 'HALF_UP_2_DECIMAL_PLACES_ON_MONTHLY_TAX_ONLY';
   source: typeof SIMPLES_FORMULA_SOURCE_URL;
 }
 
 export interface CalculateMeiInput {
-  /** Revenue accumulated in the calendar year, in decimal text. */
+
   annualRevenue: string;
   activity?: MeiActivity;
   isIcmsTaxpayer?: boolean;
   isIssTaxpayer?: boolean;
-  /** The 2026 fixed DAS table is the only monthly amount confirmed here. */
+
   year?: 2026;
 }
 
@@ -180,8 +180,8 @@ export class FiscalCalculationService {
 
     const nominalRatePercent = new ExactDecimal(band.nominalRatePercent);
     const deduction = new ExactDecimal(band.deduction);
-    // LC 123/2006, art. 18, § 1º-A: (RBT12 × Aliq − PD) / RBT12.
-    // Aliq is stored in percentage points, so divide by 100 only here.
+
+
     const effectiveRate = rbt12.mul(nominalRatePercent).div('100').sub(deduction).div(rbt12);
     const effectiveRatePercent = effectiveRate.mul('100');
     const monthlyTax = monthlyRevenue.mul(effectiveRate).toDecimalPlaces(2, ExactDecimal.ROUND_HALF_UP);
@@ -202,7 +202,7 @@ export class FiscalCalculationService {
     };
   }
 
-  /** Alias explícito para chamadas que usam o nome legal completo do regime. */
+
   calculateSimplesNacional(input: CalculateSimplesInput): SimplesCalculationResult {
     return this.calculateSimples(input);
   }
@@ -245,8 +245,8 @@ export class FiscalCalculationService {
   }
 
   private money(value: unknown, label: string): Exact {
-    // Deliberately reject Number: accepting it would already have crossed the
-    // binary floating-point boundary before Decimal could protect the value.
+
+
     if (typeof value !== 'string' || !/^\d+(?:\.\d{1,2})?$/.test(value)) {
       throw new BadRequestException(`${label} deve ser uma string decimal não negativa com até duas casas.`);
     }

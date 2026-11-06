@@ -20,8 +20,8 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     );
     const adapter = new PrismaPg({
       ...adapterOptions,
-      // O limite deve respeitar a cota do provedor; aumentar o pool não torna
-      // consultas mais rápidas e pode esgotar as conexões do Supabase.
+
+
       max: positiveInteger(config, 'DATABASE_POOL_MAX', DEFAULT_DATABASE_POOL_MAX),
       connectionTimeoutMillis: positiveInteger(config, 'DATABASE_CONNECTION_TIMEOUT_MS', 10_000),
       idleTimeoutMillis: positiveInteger(config, 'DATABASE_IDLE_TIMEOUT_MS', 30_000)

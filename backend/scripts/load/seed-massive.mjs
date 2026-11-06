@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-// Semeia um tenant dedicado para carga concorrente. Não executa migração Prisma.
-// Uso: node scripts/load/seed-massive.mjs [quantidade] [--chunk=10000] [--metadata=<arquivo-temporario>]
+import path from 'node:path';
+
+
 
 import { randomBytes, randomUUID } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
@@ -20,7 +20,7 @@ const quantity = Number(quantityArgument ?? process.env.LOAD_QUANTITY ?? 200000)
 const chunkArgument = process.argv.find((value) => value.startsWith('--chunk='));
 const chunkSize = Math.min(20000, Math.max(1000, Number(chunkArgument?.slice(8) ?? 10000)));
 const metadataArgument = process.argv.find((value) => value.startsWith('--metadata='));
-const metadataPath = metadataArgument?.slice(11) ?? process.env.LOAD_METADATA ?? join(tmpdir(), 'gft-load-massive.json');
+const metadataPath = metadataArgument?.slice(11) ?? process.env.LOAD_METADATA ?? path.join(tmpdir(), 'gft-load-massive.json');
 if (!Number.isInteger(quantity) || quantity < 1 || quantity > 200000) throw new Error('A quantidade deve ser um inteiro entre 1 e 200000.');
 
 const companyName = `Carga massiva sintetica ${runId}`;

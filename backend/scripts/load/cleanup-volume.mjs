@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-// Remove o tenant sintético criado para a medição de carga. Não execute sem autorização:
-// a exclusão apaga os lançamentos, o vínculo, a empresa e o usuário de medição.
-// Uso: node scripts/load/cleanup-volume.mjs --confirmar
+import path from 'node:path';
+
+
+
 
 import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -15,7 +15,7 @@ const { postgresAdapterOptions } = await import('../../dist/database/postgres-co
 const SCHEMA = 'gft_inteligente';
 const EMAIL = 'carga-volume@exemplo.invalid';
 const COMPANY_NAME = 'Medicao de carga (sintetica)';
-const CREDENTIALS_PATH = join(tmpdir(), 'gft-load-volume.json');
+const CREDENTIALS_PATH = path.join(tmpdir(), 'gft-load-volume.json');
 const metadataArgument = process.argv.find((value) => value.startsWith('--metadata='));
 const metadataPath = metadataArgument?.slice(11) ?? process.env.LOAD_METADATA;
 

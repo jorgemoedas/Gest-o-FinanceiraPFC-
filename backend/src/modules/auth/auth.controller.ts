@@ -51,7 +51,7 @@ export class AuthController {
 
   @Public()
   @Post('refresh')
-  // Uma sessão normal renova só após expirar; dez/minuto tolera repetição de rede sem igualar o limite de credenciais.
+
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   refresh(@Body() input: { refreshToken: string }) {
     return this.authService.refresh(input.refreshToken);

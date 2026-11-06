@@ -59,8 +59,8 @@ export class AuthService {
     const passwordHash = await bcrypt.hash(input.password, cost);
     const termsVersion = this.config.getOrThrow<string>('TERMS_VERSION');
     const privacyVersion = this.config.getOrThrow<string>('PRIVACY_POLICY_VERSION');
-    // Os identificadores são definidos antes das gravações para que o contexto
-    // de tenant já valha na inserção e as políticas aceitem as linhas.
+
+
     const userId = randomUUID();
     const companyId = randomUUID();
 
@@ -225,8 +225,8 @@ export class AuthService {
   }
 
   private async recordFailedLogin(): Promise<void> {
-    // Sem empresa nem ator identificado, o evento é gravado sem leitura de
-    // retorno, o que dispensa contexto de tenant.
+
+
     await this.prisma.auditLog.createMany({
       data: {
         action: 'AUTH_LOGIN_FAILED',

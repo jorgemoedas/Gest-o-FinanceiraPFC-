@@ -1,16 +1,16 @@
 #!/usr/bin/env node
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-// Mede Dashboard, listagem paginada e analítico com clientes concorrentes.
-// A porta de entrada é limitada por um gate global para respeitar o rate limit da aplicação.
-// Uso: node scripts/load/measure-concurrency.mjs [--clients=20,50] [--rate-per-minute=45] [--output=<arquivo-temporario>]
+import path from 'node:path';
+
+
+
 
 import { randomUUID } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 
 const BASE_URL = (process.env.LOAD_BASE_URL ?? 'http://127.0.0.1:3001/api/v1').replace(/\/+$/, '');
 const ORIGIN = process.env.LOAD_ORIGIN ?? 'http://localhost:3000';
-const CREDENTIALS_PATH = process.env.LOAD_CREDENTIALS ?? join(tmpdir(), 'gft-load-volume.json');
+const CREDENTIALS_PATH = process.env.LOAD_CREDENTIALS ?? path.join(tmpdir(), 'gft-load-volume.json');
 
 function option(name, fallback) {
   const argument = process.argv.find((value) => value.startsWith(`--${name}=`));
@@ -26,7 +26,7 @@ const clients = String(option('clients', process.env.LOAD_CLIENTS ?? '20,50'))
   .split(',').map((value) => positiveInt(value.trim(), 0)).filter(Boolean);
 const ratePerMinute = positiveInt(option('rate-per-minute', process.env.LOAD_RATE_PER_MINUTE ?? '45'), 45);
 const pauseBetweenRoutesMs = positiveInt(option('pause-between-routes-ms', process.env.LOAD_PAUSE_BETWEEN_ROUTES_MS ?? '0'), 0);
-const OUTPUT_PATH = option('output', process.env.LOAD_OUTPUT ?? join(tmpdir(), 'gft-load-concurrency.json'));
+const OUTPUT_PATH = option('output', process.env.LOAD_OUTPUT ?? path.join(tmpdir(), 'gft-load-concurrency.json'));
 if (!clients.length || clients.some((value) => value > 200)) throw new Error('Use --clients com valores inteiros entre 1 e 200.');
 if (ratePerMinute > 60) throw new Error('Use --rate-per-minute de no máximo 60 para respeitar o limitador da aplicação.');
 

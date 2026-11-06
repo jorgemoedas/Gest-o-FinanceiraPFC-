@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# Validação local do adaptador S3 com um MinIO real. O cache do binário pode ser
-# fixado pelo chamador via MINIO_BINARY/MINIO_URL; nenhum segredo é impresso.
+
+
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_DIR="$(cd -- "$SCRIPT_DIR/../.." && pwd)"
 MINIO_BINARY="${MINIO_BINARY:-${TMPDIR:-/tmp}/gft-minio-bin/minio}"

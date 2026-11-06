@@ -110,6 +110,6 @@ describe('BulkTransactionService', () => {
       changes: { category: FinanceCategory.OTHER }
     })).rejects.toBeInstanceOf(ConflictException);
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
-    // O mock não implementa rollback; em produção, o callback é executado em uma transação Prisma única.
+
   });
 });

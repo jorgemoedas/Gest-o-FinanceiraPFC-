@@ -11,7 +11,7 @@ interface DegradedHealth {
   checks: ReadinessCheck[];
 }
 
-// O bootstrap deve excluir `health` e `health/ready` do global prefix `api/v1` para preservar GET /health*.
+
 @Controller('health')
 export class HealthController {
   constructor(

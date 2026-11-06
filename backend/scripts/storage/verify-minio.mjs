@@ -72,14 +72,14 @@ try {
   await client.send(new CreateBucketCommand({ Bucket: bucket }));
   created = true;
 
-  // Ponto motivador: diretórios locais distintos representam réplicas distintas.
+
   const localReplicaA = new LocalAttachmentStorage(path.join(localRoot, 'replica-a'));
   const localReplicaB = new LocalAttachmentStorage(path.join(localRoot, 'replica-b'));
   await localReplicaA.save(keyA, bytesA);
   await expectReadFailure(localReplicaB, keyA);
   console.log('LOCAL_REPLICA_VISIBILITY=not_shared (confirmado)');
 
-  // O mesmo objeto, em dois clientes S3 independentes, é compartilhado.
+
   await storageFromReplicaA.save(keyA, bytesA);
   const downloadedA = await storageFromReplicaB.read(keyA);
   assert(downloadedA.equals(bytesA), 'Integridade do download S3 não confere.');

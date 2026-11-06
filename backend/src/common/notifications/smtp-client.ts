@@ -85,7 +85,7 @@ function buildSmtpSettings(values: RawSmtpSettings, port: number): SmtpSettings 
   };
 }
 
-/** Lê somente metadados da configuração; nunca retorna nem registra a senha. */
+
 export function readSmtpSettings(config: ConfigService, prefix = 'SMTP'): SmtpSettingsResult {
   const values = readRawSmtpSettings(config, prefix);
   const port = parsePort(values.portText);

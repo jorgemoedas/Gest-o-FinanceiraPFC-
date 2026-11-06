@@ -204,7 +204,7 @@ export function TaxEstimatorPanel() {
       <nav className="tax-sources" aria-label="Fontes oficiais da estimativa">
         <a href="https://www.planalto.gov.br/ccivil_03/leis/lcp/lcp123.htm" target="_blank" rel="noopener noreferrer">LC 123/2006 <ExternalLink size={13} aria-hidden="true" /></a>
         <a href="https://www8.receita.fazenda.gov.br/simplesnacional/noticias/NoticiaCompleta.aspx?id=c3b2044c-ff97-432a-b33c-ecf2a3df6dc3" target="_blank" rel="noopener noreferrer">Valores MEI 2026 · Receita Federal <ExternalLink size={13} aria-hidden="true" /></a>
-        <a href="https://www.gov.br/memp/pt-br/teto-do-mei" target="_blank" rel="noopener noreferrer">Limite vigente do MEI · MEMP <ExternalLink size={13} aria-hidden="true" /></a>
+        <a href="https:
       </nav>
     </section>
   );
