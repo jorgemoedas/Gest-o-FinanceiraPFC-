@@ -3,7 +3,6 @@ import { describe, expect, it } from '@jest/globals';
 import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import path from 'node:path';
 import {
   createAttachmentStorage,
@@ -13,6 +12,9 @@ import {
   resolveS3AttachmentStorageConfig,
   S3AttachmentStorage
 } from './attachment-storage';
+
+const testStorageRoot = path.join(tmpdir(), 'gft-attachment-test');
+const customStorageRoot = path.join(tmpdir(), 'gft-custom-attachments');
 
 describe('LocalAttachmentStorage', () => {
   it('creates nested directories and writes/read/removes a file', async () => {
@@ -28,7 +30,7 @@ describe('LocalAttachmentStorage', () => {
   });
 
   it.each(['../outside', '/tmp/outside', 'company/../../outside', ''])('rejects an unsafe key: %s', async (key) => {
-    const storage = new LocalAttachmentStorage(join(tmpdir(), 'gft-attachment-test'));
+    const storage = new LocalAttachmentStorage(testStorageRoot);
     await expect(storage.save(key, Buffer.from('x'))).rejects.toBeInstanceOf(BadRequestException);
     await expect(storage.read(key)).rejects.toBeInstanceOf(BadRequestException);
     await expect(storage.remove(key)).rejects.toBeInstanceOf(BadRequestException);
@@ -36,8 +38,8 @@ describe('LocalAttachmentStorage', () => {
 
   it('uses only ATTACHMENT_STORAGE_DIR when configured', () => {
     const previous = process.env.ATTACHMENT_STORAGE_DIR;
-    process.env.ATTACHMENT_STORAGE_DIR = join(tmpdir(), 'gft-custom-attachments');
-    expect(resolveAttachmentRoot()).toBe(join(tmpdir(), 'gft-custom-attachments'));
+    process.env.ATTACHMENT_STORAGE_DIR = customStorageRoot;
+    expect(resolveAttachmentRoot()).toBe(customStorageRoot);
     if (previous === undefined) delete process.env.ATTACHMENT_STORAGE_DIR;
     else process.env.ATTACHMENT_STORAGE_DIR = previous;
   });
@@ -56,7 +58,7 @@ describe('Attachment storage selection and S3 adapter', () => {
 
   it('uses local storage by default and selects S3 only when explicitly configured', () => {
     expect(resolveAttachmentStorageMode({})).toBe('local');
-    expect(createAttachmentStorage({ ATTACHMENT_STORAGE_DIR: join(tmpdir(), 'gft-test-attachments') })).toBeInstanceOf(LocalAttachmentStorage);
+    expect(createAttachmentStorage({ ATTACHMENT_STORAGE_DIR: path.join(tmpdir(), 'gft-test-attachments') })).toBeInstanceOf(LocalAttachmentStorage);
     expect(createAttachmentStorage(s3Environment)).toBeInstanceOf(S3AttachmentStorage);
     expect(resolveS3AttachmentStorageConfig(s3Environment)).toEqual({
       endpoint: 'http://127.0.0.1:9000',
