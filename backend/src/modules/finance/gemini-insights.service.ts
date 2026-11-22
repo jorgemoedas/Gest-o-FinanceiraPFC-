@@ -72,7 +72,9 @@ function extractGenerateContentText(payload: unknown): string | null {
 export type GeminiObservability = { metrics?: MetricsService; alerts?: AlertsService };
 export const GEMINI_OBSERVABILITY = 'GEMINI_OBSERVABILITY';
 
-type GeminiRequestResult = { response: Response; model: string; mode: 'interactions' | 'generateContent' };
+type RequestMode = 'interactions' | 'generateContent';
+type GeminiAttemptCandidate = { model: string; mode: RequestMode };
+type GeminiRequestResult = { response: Response; model: string; mode: RequestMode };
 
 function buildPrompt(months: number, dashboard: Awaited<ReturnType<FinanceService['getDashboard']>>): string {
   const aggregateOnly = {
@@ -112,12 +114,13 @@ export class GeminiInsightsService {
     this.baseUrl = this.interactionsUrl.includes('/v1beta')
       ? this.interactionsUrl.split('/v1beta')[0] + '/v1beta'
       : GEMINI_BASE_URL;
-    this.timeoutMs = this.positiveConfig('GEMINI_TIMEOUT_MS', 12000);
+    const configuredTimeout = this.positiveConfig('GEMINI_TIMEOUT_MS', 5000);
+    this.timeoutMs = Math.min(configuredTimeout, 6000);
     this.resilience = new UpstreamResilience({
-      attempts: this.positiveConfig('UPSTREAM_MAX_ATTEMPTS', 2),
-      baseDelayMs: this.positiveConfig('UPSTREAM_RETRY_BASE_DELAY_MS', 800),
-      failureThreshold: this.positiveConfig('UPSTREAM_CIRCUIT_FAILURES', 3),
-      recoveryMs: this.positiveConfig('UPSTREAM_CIRCUIT_RECOVERY_MS', 30000)
+      attempts: 1,
+      baseDelayMs: Math.min(this.positiveConfig('UPSTREAM_RETRY_BASE_DELAY_MS', 200), 500),
+      failureThreshold: this.positiveConfig('UPSTREAM_CIRCUIT_FAILURES', 5),
+      recoveryMs: this.positiveConfig('UPSTREAM_CIRCUIT_RECOVERY_MS', 15000)
     });
     this.metrics = observability?.metrics;
     this.alerts = observability?.alerts;
@@ -164,53 +167,70 @@ export class GeminiInsightsService {
     return { generated: true, model: result.model, generatedAt: new Date().toISOString(), insights };
   }
 
-  private async requestWithFallback(apiKey: string, prompt: string, model: string): Promise<GeminiRequestResult> {
-    let activeModel = model;
-    let activeMode: 'interactions' | 'generateContent' = 'interactions';
+  private buildCandidates(primaryModel: string): GeminiAttemptCandidate[] {
+    const models = Array.from(new Set([primaryModel, GEMINI_FALLBACK_MODEL].filter(Boolean)));
+    const candidates: GeminiAttemptCandidate[] = [];
+    for (const model of models) {
+      candidates.push({ model, mode: 'interactions' });
+    }
+    for (const model of models) {
+      candidates.push({ model, mode: 'generateContent' });
+    }
+    return candidates;
+  }
 
-    const sendRequest = (selectedModel: string, mode: 'interactions' | 'generateContent') => {
-      if (mode === 'generateContent') {
-        return fetch(`${this.baseUrl}/models/${encodeURIComponent(selectedModel)}:generateContent`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
-          signal: AbortSignal.timeout(this.timeoutMs)
-        });
-      }
-      return fetch(this.interactionsUrl, {
+  private sendSingleRequest(apiKey: string, prompt: string, candidate: GeminiAttemptCandidate): Promise<Response> {
+    if (candidate.mode === 'generateContent') {
+      return fetch(`${this.baseUrl}/models/${encodeURIComponent(candidate.model)}:generateContent`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-        body: JSON.stringify({ model: selectedModel, input: prompt }),
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
         signal: AbortSignal.timeout(this.timeoutMs)
       });
-    };
-
-    const response = await this.resilience.execute(
-      async () => {
-        const upstreamResponse = await sendRequest(activeModel, activeMode);
-        if (upstreamResponse.status === 503) {
-          if (activeMode === 'interactions') {
-            activeMode = 'generateContent';
-            throw new TemporaryGeminiFailure(503);
-          }
-          if (activeModel !== GEMINI_FALLBACK_MODEL) {
-            activeModel = GEMINI_FALLBACK_MODEL;
-            activeMode = 'interactions';
-            throw new TemporaryGeminiFailure(503);
-          }
-        }
-        if ([500, 502, 503, 504].includes(upstreamResponse.status)) {
-          throw new TemporaryGeminiFailure(upstreamResponse.status);
-        }
-        return upstreamResponse;
-      },
-      (error) => transientNetworkFailure(error) || error instanceof TemporaryGeminiFailure,
-      (error) => transientNetworkFailure(error) || error instanceof TemporaryGeminiFailure
-    ).catch((error: unknown) => {
-      throw new GeminiRequestFailure(error, activeModel);
+    }
+    return fetch(this.interactionsUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+      body: JSON.stringify({ model: candidate.model, input: prompt }),
+      signal: AbortSignal.timeout(this.timeoutMs)
     });
+  }
 
-    return { response, model: activeModel, mode: activeMode };
+  private async requestWithFallback(apiKey: string, prompt: string, model: string): Promise<GeminiRequestResult> {
+    const candidates = this.buildCandidates(model);
+    let lastError: unknown;
+    let lastResponse: Response | null = null;
+    let lastCandidate = candidates[0];
+
+    for (const candidate of candidates) {
+      lastCandidate = candidate;
+      try {
+        const upstreamResponse = await this.resilience.execute(
+          () => this.sendSingleRequest(apiKey, prompt, candidate),
+          (error) => transientNetworkFailure(error),
+          (error) => transientNetworkFailure(error)
+        );
+
+        if (upstreamResponse.status === 503 || upstreamResponse.status === 504) {
+          this.logger.warn(`Gemini temporary HTTP ${upstreamResponse.status} (model=${candidate.model}, mode=${candidate.mode}), trying next fallback`);
+          lastResponse = upstreamResponse;
+          lastError = new TemporaryGeminiFailure(upstreamResponse.status);
+          continue;
+        }
+
+        return { response: upstreamResponse, model: candidate.model, mode: candidate.mode };
+      } catch (error: unknown) {
+        const timedOut = error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');
+        this.logger.warn(`Gemini attempt failed (model=${candidate.model}, mode=${candidate.mode}): ${timedOut ? 'timeout' : (error instanceof Error ? error.message : String(error))}`);
+        lastError = timedOut ? new TemporaryGeminiFailure(504) : error;
+      }
+    }
+
+    if (lastResponse) {
+      return { response: lastResponse, model: lastCandidate.model, mode: lastCandidate.mode };
+    }
+
+    throw new GeminiRequestFailure(lastError, lastCandidate.model);
   }
 
   private async handleRequestFailure(principal: AuthPrincipal, months: number, failure: GeminiRequestFailure): Promise<never> {
@@ -218,13 +238,11 @@ export class GeminiInsightsService {
     const timedOut = error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');
     const status = error instanceof TemporaryGeminiFailure ? error.status : undefined;
     this.logger.warn(`Gemini request error (model=${failure.model}): ${error instanceof Error ? error.message : String(error)}`);
-    const mapped = timedOut
+    const mapped = timedOut || status === 504
       ? new GatewayTimeoutException('A análise financeira excedeu o tempo de resposta.')
-      : status === 504
-        ? new GatewayTimeoutException('A API Gemini excedeu o tempo de resposta. Tente novamente mais tarde.')
-        : new ServiceUnavailableException(error instanceof CircuitOpenError
-          ? 'A API Gemini está temporariamente indisponível após falhas repetidas. Tente novamente mais tarde.'
-          : 'Não foi possível alcançar a API Gemini neste momento.');
+      : new ServiceUnavailableException(error instanceof CircuitOpenError
+        ? 'A API Gemini está temporariamente indisponível após falhas repetidas. Tente novamente mais tarde.'
+        : 'Não foi possível alcançar a API Gemini neste momento.');
     await this.recordFailure(principal, months, status ? `provider_${status}` : mapped.getStatus().toString(), failure.model);
     throw mapped;
   }
@@ -236,9 +254,11 @@ export class GeminiInsightsService {
       ? new RateLimitException('A cota temporária de análises Gemini foi atingida. Tente novamente mais tarde.')
       : response.status === 403 || response.status === 401
         ? new ServiceUnavailableException('A integração Gemini não está autorizada no servidor.')
-        : response.status === 503
-          ? new ServiceUnavailableException('A API Gemini está temporariamente indisponível por alta demanda. Tente novamente em instantes.')
-          : new BadGatewayException('A API Gemini não conseguiu concluir a análise.');
+        : response.status === 504
+          ? new GatewayTimeoutException('A análise financeira excedeu o tempo de resposta.')
+          : response.status === 503
+            ? new ServiceUnavailableException('A API Gemini está temporariamente indisponível por alta demanda. Tente novamente em instantes.')
+            : new BadGatewayException('A API Gemini não conseguiu concluir a análise.');
     await this.recordFailure(principal, months, `provider_${response.status}`, model);
     throw mapped;
   }
