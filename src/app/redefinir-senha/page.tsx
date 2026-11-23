@@ -2,19 +2,27 @@
 
 import Link from 'next/link';
 import { ArrowRight, KeyRound, LoaderCircle } from 'lucide-react';
-import { useSearchParams } from 'next/navigation';
-import { Suspense, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useEffect, useState } from 'react';
 import { AuthShell } from '@/components/auth/auth-shell';
 import { confirmPasswordReset, passwordResetConfirmSchema } from '@/features/auth/password-reset-client';
 
 function RedefinirSenhaForm() {
+  const router = useRouter();
   const params = useSearchParams();
   const token = params.get('token') ?? '';
+  const hasToken = token.trim().length > 0;
   const [newPassword, setNewPassword] = useState('');
   const [repeatPassword, setRepeatPassword] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!success) return;
+    const timeout = window.setTimeout(() => router.replace('/login'), 1600);
+    return () => window.clearTimeout(timeout);
+  }, [router, success]);
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -47,9 +55,12 @@ function RedefinirSenhaForm() {
           <h1 id="reset-title">Defina uma nova senha</h1>
           <p>Escolha uma senha com pelo menos 12 caracteres e até 72 bytes em UTF-8.</p>
         </div>
+        {!hasToken ? <div className="notice notice--error" role="alert">O link de redefinição está ausente ou é inválido.</div> : null}
         {error ? <div className="notice notice--error" role="alert">{error}</div> : null}
         {success ? (
-          <div className="notice" role="status">Senha redefinida com sucesso. Agora você já pode entrar com a nova senha.</div>
+          <div className="notice" role="status">Senha redefinida com sucesso. Redirecionando para o login…</div>
+        ) : !hasToken ? (
+          <p className="switch-auth"><Link href="/login">Voltar para o login <ArrowRight size={15} aria-hidden="true" /></Link></p>
         ) : (
           <form className="auth-form" onSubmit={submit} noValidate>
             <div className="field-group">

@@ -74,6 +74,8 @@ export function LoginForm({ initialError = '' }: { initialError?: string }) {
           autoComplete="current-password"
         />
 
+        <p className="forgot-password-link"><Link href="/esqueci-senha">Esqueci minha senha</Link></p>
+
         <button className="primary-button" type="submit" disabled={isSubmitting}>
           {isSubmitting ? <LoaderCircle size={18} className="spinner" aria-hidden="true" /> : null}
           <span>{isSubmitting ? 'Verificando acesso…' : 'Entrar na conta'}</span>

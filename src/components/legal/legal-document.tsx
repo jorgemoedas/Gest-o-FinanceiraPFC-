@@ -1,4 +1,7 @@
+'use client';
+
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { BrandMark } from '@/components/auth/auth-shell';
 
 export interface LegalSection {
@@ -15,6 +18,17 @@ interface LegalDocumentProps {
 }
 
 export function LegalDocument({ title, version, sections, draftNotice }: LegalDocumentProps) {
+  const router = useRouter();
+
+  function handleBack() {
+    if (window.history.length > 1) {
+      router.back();
+      return;
+    }
+    if (window.opener) window.close();
+    router.replace('/login');
+  }
+
   return (
     <main className="legal-page">
       <header className="legal-header">
@@ -22,7 +36,7 @@ export function LegalDocument({ title, version, sections, draftNotice }: LegalDo
         <nav className="legal-nav" aria-label="Documentos legais">
           <Link href="/termos">Termos</Link>
           <Link href="/privacidade">Privacidade</Link>
-          <Link className="legal-nav__back" href="/register">Voltar ao cadastro</Link>
+          <button className="legal-nav__back" type="button" onClick={handleBack}>Voltar ao cadastro</button>
         </nav>
       </header>
 
@@ -54,7 +68,7 @@ export function LegalDocument({ title, version, sections, draftNotice }: LegalDo
 
         <footer className="legal-document__footer">
           <p>Versão registrada no cadastro: <strong>{version}</strong>.</p>
-          <Link href="/register">Voltar ao cadastro e revisar os aceites</Link>
+          <button className="legal-document__back" type="button" onClick={handleBack}>Voltar ao cadastro e revisar os aceites</button>
         </footer>
       </article>
 
