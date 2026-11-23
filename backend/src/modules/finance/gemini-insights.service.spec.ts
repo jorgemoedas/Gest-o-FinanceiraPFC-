@@ -95,7 +95,7 @@ describe('GeminiInsightsService', () => {
     jest.mocked(config.get).mockImplementation(((key: string, fallback?: string) => key === 'GEMINI_API_KEY' ? 'unit-test-key' : fallback) as never);
     const fetch = jest.spyOn(global, 'fetch').mockResolvedValue(new Response(null, { status: 503 }));
     await expect(service.create(principal, 6)).rejects.toBeInstanceOf(ServiceUnavailableException);
-    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch).toHaveBeenCalledTimes(4);
     expect(audit.write).toHaveBeenCalledWith(expect.objectContaining({
       metadata: expect.objectContaining({ result: 'provider_503', model: 'gemini-3.5-flash-lite' })
     }));
@@ -148,7 +148,7 @@ describe('GeminiInsightsService', () => {
     timeout.name = 'TimeoutError';
     const fetch = jest.spyOn(global, 'fetch').mockRejectedValue(timeout);
     await expect(service.create(principal, 6)).rejects.toBeInstanceOf(GatewayTimeoutException);
-    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch).toHaveBeenCalledTimes(4);
     fetch.mockRestore();
   });
 
@@ -164,7 +164,7 @@ describe('GeminiInsightsService', () => {
     }) as never);
     service = new GeminiInsightsService(config, finance, audit);
     const fetch = jest.spyOn(global, 'fetch')
-      .mockResolvedValueOnce(new Response(null, { status: 503 }))
+      .mockRejectedValueOnce(new TypeError('temporary network failure'))
       .mockResolvedValueOnce(jsonResponse({ output_text: 'Recuperado.' }));
     await expect(service.create(principal, 6)).rejects.toBeInstanceOf(ServiceUnavailableException);
     await expect(service.create(principal, 6)).rejects.toThrow('temporariamente indisponível após falhas repetidas');
