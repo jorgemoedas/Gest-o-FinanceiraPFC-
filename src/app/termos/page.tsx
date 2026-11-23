@@ -47,12 +47,15 @@ const sections: LegalSection[] = [
   }
 ];
 
-export default function TermsPage() {
+export default async function TermsPage({ searchParams }: { searchParams: Promise<{ from?: string | string[] }> }) {
+  const params = await searchParams;
+  const from = Array.isArray(params.from) ? params.from[0] : params.from;
   return (
     <LegalDocument
       title="Termos de Uso"
       version={process.env.TERMS_VERSION ?? '2026-10-01'}
       sections={sections}
+      returnPath={from === 'cadastro' ? '/register' : undefined}
       draftNotice="Este documento foi redigido para a demonstração do TCC. Antes de receber usuários externos ou dados reais, o responsável pelo projeto deve identificar o controlador, informar um canal de contato e submeter o texto à revisão apropriada."
     />
   );

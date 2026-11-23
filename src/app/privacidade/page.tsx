@@ -59,12 +59,15 @@ const sections: LegalSection[] = [
   }
 ];
 
-export default function PrivacyPage() {
+export default async function PrivacyPage({ searchParams }: { searchParams: Promise<{ from?: string | string[] }> }) {
+  const params = await searchParams;
+  const from = Array.isArray(params.from) ? params.from[0] : params.from;
   return (
     <LegalDocument
       title="Política de Privacidade"
       version={process.env.PRIVACY_POLICY_VERSION ?? '2026-10-01'}
       sections={sections}
+      returnPath={from === 'cadastro' ? '/register' : undefined}
       draftNotice="Minuta acadêmica para apresentação do TCC. O controlador, o canal de contato, o prazo de retenção e o procedimento para exercício de direitos ainda precisam ser definidos. Não use este protótipo com dados reais até concluir essas definições e a revisão adequada."
     />
   );

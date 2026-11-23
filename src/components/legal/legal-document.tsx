@@ -15,18 +15,23 @@ interface LegalDocumentProps {
   version: string;
   sections: LegalSection[];
   draftNotice: string;
+  returnPath?: string;
 }
 
-export function LegalDocument({ title, version, sections, draftNotice }: LegalDocumentProps) {
+export function LegalDocument({ title, version, sections, draftNotice, returnPath }: LegalDocumentProps) {
   const router = useRouter();
 
   function handleBack() {
+    if (returnPath) {
+      router.replace(returnPath);
+      return;
+    }
     if (window.history.length > 1) {
       router.back();
       return;
     }
     if (window.opener) window.close();
-    router.replace('/login');
+    router.replace('/register');
   }
 
   return (

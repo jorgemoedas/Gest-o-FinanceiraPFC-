@@ -257,6 +257,7 @@ describe('RNF06 — auditoria automatizada de acessibilidade', () => {
     render(<LoginForm />);
     const email = screen.getByRole('textbox', { name: 'E-mail' });
     const password = screen.getByLabelText('Senha');
+    const forgotPassword = screen.getByRole('link', { name: 'Esqueci minha senha' });
     const submit = screen.getByRole('button', { name: 'Entrar na conta' });
     email.focus();
     expect(document.activeElement).toBe(email);
@@ -264,6 +265,8 @@ describe('RNF06 — auditoria automatizada de acessibilidade', () => {
     expect(document.activeElement).toBe(password);
     await user.tab();
     expect(document.activeElement).toHaveAttribute('aria-label', 'Mostrar senha');
+    await user.tab();
+    expect(document.activeElement).toBe(forgotPassword);
     await user.tab();
     expect(document.activeElement).toBe(submit);
   });
