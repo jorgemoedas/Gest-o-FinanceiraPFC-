@@ -32,6 +32,12 @@ describe('RegisterForm draft persistence', () => {
 
     const termsLink = screen.getByRole('link', { name: 'Ler termos' });
     expect(termsLink).toHaveAttribute('href', '/termos?from=cadastro');
+    expect(termsLink).not.toHaveAttribute('target', '_blank');
+    expect(termsLink).not.toHaveAttribute('rel');
+    const privacyLink = screen.getByRole('link', { name: 'Ler política' });
+    expect(privacyLink).toHaveAttribute('href', '/privacidade?from=cadastro');
+    expect(privacyLink).not.toHaveAttribute('target', '_blank');
+    expect(privacyLink).not.toHaveAttribute('rel');
     await user.click(termsLink);
     expect(JSON.parse(sessionStorage.getItem('gft_register_draft') ?? '{}')).toEqual({
       companyName: 'Café da Praça',

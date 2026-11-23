@@ -201,7 +201,7 @@ export function RegisterForm({ documentVersions, initialError = '' }: { document
               />
               <span>Li e aceito os <strong>Termos de Uso</strong>{documentVersions ? <small>Versão {documentVersions.termsVersion}</small> : null}</span>
             </label>
-            <Link className="consent-document-link" href="/termos?from=cadastro" target="_blank" rel="noopener noreferrer" onClick={() => saveRegisterDraft()}>Ler termos</Link>
+            <Link className="consent-document-link" href="/termos?from=cadastro" onClick={() => saveRegisterDraft()}>Ler termos</Link>
           </div>
           {errors.acceptedTerms?.message ? <p className="field-error consent-error">{errors.acceptedTerms.message}</p> : null}
 
@@ -217,7 +217,7 @@ export function RegisterForm({ documentVersions, initialError = '' }: { document
               />
               <span>Li e aceito a <strong>Política de Privacidade</strong>{documentVersions ? <small>Versão {documentVersions.privacyVersion}</small> : null}</span>
             </label>
-            <Link className="consent-document-link" href="/privacidade?from=cadastro" target="_blank" rel="noopener noreferrer" onClick={() => saveRegisterDraft()}>Ler política</Link>
+            <Link className="consent-document-link" href="/privacidade?from=cadastro" onClick={() => saveRegisterDraft()}>Ler política</Link>
           </div>
           {errors.acceptedPrivacy?.message ? <p className="field-error consent-error">{errors.acceptedPrivacy.message}</p> : null}
 
