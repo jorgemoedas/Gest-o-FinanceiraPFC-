@@ -83,8 +83,21 @@ describe('PasswordResetService', () => {
 
   it('entrega token somente quando notifier está configurado', async () => {
     const tx = makeTx();
-    const prisma = makePrisma(tx);
-    const notifier: PasswordResetNotifier = { isConfigured: jest.fn().mockReturnValue(true), send: jest.fn().mockResolvedValue(undefined) };
+    let transactionActive = false;
+    const prisma = {
+      $transaction: jest.fn().mockImplementation(async (callback: (value: FakeTx) => unknown) => {
+        transactionActive = true;
+        try {
+          return await callback(tx);
+        } finally {
+          transactionActive = false;
+        }
+      })
+    } as any;
+    const notifier: PasswordResetNotifier = {
+      isConfigured: jest.fn().mockReturnValue(true),
+      send: jest.fn().mockImplementation(async () => expect(transactionActive).toBe(false))
+    };
     const result = await new PasswordResetService(prisma, notifier).request({ email: user.email });
     expect(result).toEqual({ delivered: true });
     expect(notifier.send).toHaveBeenCalledWith(expect.objectContaining({ email: user.email, token: expect.any(String), expiresAt: expect.any(Date) }));

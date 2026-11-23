@@ -48,7 +48,7 @@ export class PasswordResetService {
     const tokenHash = createHash('sha256').update(token, 'utf8').digest('hex');
     const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MS);
 
-    return this.prisma.$transaction(async (tx) => {
+    const resetToken = await this.prisma.$transaction(async (tx) => {
       await setTenantContext(tx, { userId: user.id, companyId: null });
       const now = new Date();
       await tx.passwordResetToken.updateMany({
@@ -56,25 +56,26 @@ export class PasswordResetService {
         data: { usedAt: now }
       });
 
-      const resetToken = await tx.passwordResetToken.create({
+      const createdToken = await tx.passwordResetToken.create({
         data: { userId: user.id, tokenHash, expiresAt }
       });
+      return { id: createdToken.id };
+    });
 
-      let delivered = false;
-      let reason = 'delivery_not_configured';
-      if (this.notifier.isConfigured()) {
-        try {
-          await this.notifier.send({ email: user.email, token, expiresAt });
-          delivered = true;
-          reason = 'delivery_sent';
-        } catch {
-
-          reason = 'delivery_failed';
-        }
+    let delivered = false;
+    let reason = 'delivery_not_configured';
+    if (this.notifier.isConfigured()) {
+      try {
+        await this.notifier.send({ email: user.email, token, expiresAt });
+        delivered = true;
+        reason = 'delivery_sent';
+      } catch {
+        reason = 'delivery_failed';
       }
+    }
 
-
-
+    await this.prisma.$transaction(async (tx) => {
+      await setTenantContext(tx, { userId: user.id, companyId: null });
       await tx.auditLog.createMany({
         data: {
           actorUserId: user.id,
@@ -84,9 +85,9 @@ export class PasswordResetService {
           metadata: { delivered, reason }
         }
       });
-
-      return { delivered };
     });
+
+    return { delivered };
   }
 
   async confirm(input: { token: string; newPassword: string }): Promise<{ reset: true }> {

@@ -8,6 +8,8 @@ describe('SmtpPasswordResetNotifier', () => {
   }) as never;
 
   afterEach(() => {
+    delete process.env.RESEND_API_KEY;
+    delete process.env.MAIL_FROM;
     jest.restoreAllMocks();
     jest.clearAllMocks();
   });
@@ -31,6 +33,44 @@ describe('SmtpPasswordResetNotifier', () => {
       to: 'pessoa@empresa.test',
       text: expect.stringContaining('https://app.gft.test/redefinir-senha?token=token-local-%C3%BAnico')
     }));
+    expect(nodemailer.createTransport).toHaveBeenCalledWith(expect.objectContaining({
+      connectionTimeout: 8000,
+      greetingTimeout: 8000,
+      socketTimeout: 8000
+    }));
+  });
+
+  it('prioriza a API HTTP do Resend quando a chave está configurada', async () => {
+    process.env.RESEND_API_KEY = 're_test_key';
+    process.env.MAIL_FROM = 'GFT <mail@gft.test>';
+    const fetchMock = jest.fn().mockResolvedValue({ ok: true, status: 200, text: jest.fn() });
+    jest.spyOn(globalThis, 'fetch').mockImplementation(fetchMock as typeof fetch);
+    const notifier = new SmtpPasswordResetNotifier(config({ PUBLIC_APP_URL: 'https://app.gft.test' }), logger);
+
+    expect(notifier.isConfigured()).toBe(true);
+    await notifier.send({ email: 'pessoa@empresa.test', token: 'token', expiresAt: new Date('2026-11-16T12:30:00.000Z') });
+
+    expect(fetchMock).toHaveBeenCalledWith('https://api.resend.com/emails', expect.objectContaining({
+      method: 'POST',
+      headers: { Authorization: 'Bearer re_test_key', 'Content-Type': 'application/json' },
+      signal: expect.any(AbortSignal)
+    }));
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual(expect.objectContaining({
+      from: 'GFT <mail@gft.test>',
+      to: 'pessoa@empresa.test',
+      subject: 'Redefinição de senha — GFT Inteligente',
+      html: expect.any(String),
+      text: expect.stringContaining('https://app.gft.test/redefinir-senha?token=token')
+    }));
+  });
+
+  it('inclui status e corpo quando o Resend responde com erro HTTP', async () => {
+    process.env.RESEND_API_KEY = 're_test_key';
+    jest.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: false, status: 422, text: jest.fn().mockResolvedValue('invalid from') } as unknown as Response);
+    const notifier = new SmtpPasswordResetNotifier(config({ PUBLIC_APP_URL: 'https://app.gft.test' }), logger);
+
+    await expect(notifier.send({ email: 'pessoa@empresa.test', token: 'token', expiresAt: new Date() }))
+      .rejects.toThrow('status 422: invalid from');
   });
 
   it('expõe configuração ausente, avisa na inicialização e não simula envio', async () => {

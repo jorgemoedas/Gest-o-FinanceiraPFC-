@@ -100,6 +100,9 @@ export function createSmtpTransport(settings: SmtpSettings): Transporter {
     host: settings.host,
     port: settings.port,
     secure: settings.secure,
+    connectionTimeout: 8000,
+    greetingTimeout: 8000,
+    socketTimeout: 8000,
     ...(settings.user && settings.password ? { auth: { user: settings.user, pass: settings.password } } : {})
   });
 }
