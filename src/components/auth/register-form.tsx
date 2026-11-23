@@ -4,9 +4,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ArrowRight, Building2, LoaderCircle, Mail } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState, type ChangeEvent } from 'react';
 import { useForm } from 'react-hook-form';
-import { useWatch } from 'react-hook-form';
 import { register as createAccount } from '@/features/auth/auth-client';
 import type { AuthDocumentVersions } from '@/features/auth/types';
 import { registerFormSchema, type RegisterFormValues } from '@/features/auth/validation';
@@ -20,61 +19,69 @@ const registerDefaultValues: RegisterFormValues = {
   acceptedTerms: false,
   acceptedPrivacy: false
 };
+type RegisterDraft = Pick<RegisterFormValues, 'email' | 'companyName' | 'acceptedTerms' | 'acceptedPrivacy'>;
+
+function readRegisterDraft(): RegisterDraft {
+  const emptyDraft: RegisterDraft = {
+    email: '',
+    companyName: '',
+    acceptedTerms: false,
+    acceptedPrivacy: false
+  };
+  if (typeof window === 'undefined') return emptyDraft;
+  try {
+    const rawDraft = window.sessionStorage.getItem(REGISTER_DRAFT_KEY);
+    if (!rawDraft) return emptyDraft;
+    const draft = JSON.parse(rawDraft) as Partial<RegisterDraft>;
+    return {
+      email: typeof draft.email === 'string' ? draft.email : '',
+      companyName: typeof draft.companyName === 'string' ? draft.companyName : '',
+      acceptedTerms: draft.acceptedTerms === true,
+      acceptedPrivacy: draft.acceptedPrivacy === true
+    };
+  } catch {
+    return emptyDraft;
+  }
+}
 
 export function RegisterForm({ documentVersions, initialError = '' }: { documentVersions: AuthDocumentVersions | null; initialError?: string }) {
   const router = useRouter();
   const [serverError, setServerError] = useState(initialError);
-  const [draftReady, setDraftReady] = useState(false);
+  const [initialDraft] = useState<RegisterDraft>(() => readRegisterDraft());
   const {
-    control,
     register: registerField,
     handleSubmit,
-    reset,
+    getValues,
     formState: { errors, isSubmitting }
   } = useForm<RegisterFormValues>({
     resolver: zodResolver(registerFormSchema),
-    defaultValues: registerDefaultValues,
+    defaultValues: { ...registerDefaultValues, ...initialDraft },
     mode: 'onTouched'
   });
-  const formValues = useWatch({ control });
 
-  useEffect(() => {
+  function saveRegisterDraft(patch: Partial<RegisterDraft> = {}) {
     try {
-      const rawDraft = sessionStorage.getItem(REGISTER_DRAFT_KEY);
-      if (rawDraft) {
-        const draft = JSON.parse(rawDraft) as Partial<Pick<RegisterFormValues, 'email' | 'companyName' | 'acceptedTerms' | 'acceptedPrivacy'>>;
-        reset({
-          ...registerDefaultValues,
-          email: typeof draft.email === 'string' ? draft.email : '',
-          companyName: typeof draft.companyName === 'string' ? draft.companyName : '',
-          acceptedTerms: draft.acceptedTerms === true,
-          acceptedPrivacy: draft.acceptedPrivacy === true
-        });
-      }
-    } catch {
-      try {
-        sessionStorage.removeItem(REGISTER_DRAFT_KEY);
-      } catch {
-        return;
-      }
-    } finally {
-      setDraftReady(true);
-    }
-  }, [reset]);
-
-  useEffect(() => {
-    if (!draftReady) return;
-    try {
-      sessionStorage.setItem(REGISTER_DRAFT_KEY, JSON.stringify({
-        email: formValues.email ?? '',
-        companyName: formValues.companyName ?? '',
-        acceptedTerms: formValues.acceptedTerms === true,
-        acceptedPrivacy: formValues.acceptedPrivacy === true
+      const values = getValues();
+      window.sessionStorage.setItem(REGISTER_DRAFT_KEY, JSON.stringify({
+        email: patch.email ?? values.email ?? '',
+        companyName: patch.companyName ?? values.companyName ?? '',
+        acceptedTerms: patch.acceptedTerms ?? values.acceptedTerms === true,
+        acceptedPrivacy: patch.acceptedPrivacy ?? values.acceptedPrivacy === true
       }));
     } catch {
       return;
     }
-  }, [draftReady, formValues.email, formValues.companyName, formValues.acceptedTerms, formValues.acceptedPrivacy]);
+  }
+
+  function saveTextFieldChange(field: 'email' | 'companyName', event: ChangeEvent<HTMLInputElement>, onChange: (event: ChangeEvent<HTMLInputElement>) => unknown) {
+    onChange(event);
+    saveRegisterDraft({ [field]: event.target.value });
+  }
+
+  function saveCheckboxChange(field: 'acceptedTerms' | 'acceptedPrivacy', event: ChangeEvent<HTMLInputElement>, onChange: (event: ChangeEvent<HTMLInputElement>) => unknown) {
+    onChange(event);
+    saveRegisterDraft({ [field]: event.target.checked });
+  }
 
   async function onSubmit(values: RegisterFormValues) {
     if (!documentVersions) {
@@ -99,6 +106,11 @@ export function RegisterForm({ documentVersions, initialError = '' }: { document
       setServerError(error instanceof Error ? error.message : 'Não foi possível criar a conta. Tente novamente.');
     }
   }
+
+  const companyRegistration = registerField('companyName');
+  const emailRegistration = registerField('email');
+  const termsRegistration = registerField('acceptedTerms');
+  const privacyRegistration = registerField('acceptedPrivacy');
 
   const versionsUnavailable = !documentVersions;
   const versionsError = versionsUnavailable
@@ -137,7 +149,8 @@ export function RegisterForm({ documentVersions, initialError = '' }: { document
               placeholder="Ex.: Café da Praça"
               aria-invalid={Boolean(errors.companyName)}
               aria-describedby={errors.companyName ? 'company-error' : undefined}
-              {...registerField('companyName')}
+              {...companyRegistration}
+              onChange={(event) => saveTextFieldChange('companyName', event, companyRegistration.onChange)}
             />
           </div>
           {errors.companyName?.message ? <p className="field-error" id="company-error">{errors.companyName.message}</p> : null}
@@ -160,7 +173,8 @@ export function RegisterForm({ documentVersions, initialError = '' }: { document
               placeholder="voce@empresa.com.br"
               aria-invalid={Boolean(errors.email)}
               aria-describedby={errors.email ? 'email-error' : undefined}
-              {...registerField('email')}
+              {...emailRegistration}
+              onChange={(event) => saveTextFieldChange('email', event, emailRegistration.onChange)}
             />
           </div>
           {errors.email?.message ? <p className="field-error" id="email-error">{errors.email.message}</p> : null}
@@ -177,19 +191,33 @@ export function RegisterForm({ documentVersions, initialError = '' }: { document
           <legend>Confirmações obrigatórias</legend>
           <div className="consent-row">
             <label className={`consent-option${errors.acceptedTerms ? ' consent-option--error' : ''}`} htmlFor="acceptedTerms">
-              <input id="acceptedTerms" type="checkbox" required {...registerField('acceptedTerms')} aria-invalid={Boolean(errors.acceptedTerms)} />
+              <input
+                id="acceptedTerms"
+                type="checkbox"
+                required
+                {...termsRegistration}
+                onChange={(event) => saveCheckboxChange('acceptedTerms', event, termsRegistration.onChange)}
+                aria-invalid={Boolean(errors.acceptedTerms)}
+              />
               <span>Li e aceito os <strong>Termos de Uso</strong>{documentVersions ? <small>Versão {documentVersions.termsVersion}</small> : null}</span>
             </label>
-            <Link className="consent-document-link" href="/termos?from=cadastro" target="_blank" rel="noopener noreferrer">Ler termos</Link>
+            <Link className="consent-document-link" href="/termos?from=cadastro" target="_blank" rel="noopener noreferrer" onClick={() => saveRegisterDraft()}>Ler termos</Link>
           </div>
           {errors.acceptedTerms?.message ? <p className="field-error consent-error">{errors.acceptedTerms.message}</p> : null}
 
           <div className="consent-row">
             <label className={`consent-option${errors.acceptedPrivacy ? ' consent-option--error' : ''}`} htmlFor="acceptedPrivacy">
-              <input id="acceptedPrivacy" type="checkbox" required {...registerField('acceptedPrivacy')} aria-invalid={Boolean(errors.acceptedPrivacy)} />
+              <input
+                id="acceptedPrivacy"
+                type="checkbox"
+                required
+                {...privacyRegistration}
+                onChange={(event) => saveCheckboxChange('acceptedPrivacy', event, privacyRegistration.onChange)}
+                aria-invalid={Boolean(errors.acceptedPrivacy)}
+              />
               <span>Li e aceito a <strong>Política de Privacidade</strong>{documentVersions ? <small>Versão {documentVersions.privacyVersion}</small> : null}</span>
             </label>
-            <Link className="consent-document-link" href="/privacidade?from=cadastro" target="_blank" rel="noopener noreferrer">Ler política</Link>
+            <Link className="consent-document-link" href="/privacidade?from=cadastro" target="_blank" rel="noopener noreferrer" onClick={() => saveRegisterDraft()}>Ler política</Link>
           </div>
           {errors.acceptedPrivacy?.message ? <p className="field-error consent-error">{errors.acceptedPrivacy.message}</p> : null}
 
